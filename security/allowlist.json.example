@@ -1,0 +1,6 @@
+{
+  "chat_ids": [
+    "123456789"
+  ],
+  "notes": "Copy to allowlist.json and add your Telegram chat IDs. /whoami command (add to bridge) returns your current chat id."
+}

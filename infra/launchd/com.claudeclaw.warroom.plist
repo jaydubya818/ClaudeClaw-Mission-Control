@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.claudeclaw.warroom</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/jay/claudeclaw/apps/warroom/.venv/bin/python</string>
+    <string>/Users/jay/claudeclaw/apps/warroom/server.py</string>
+  </array>
+
+  <key>WorkingDirectory</key><string>/Users/jay/claudeclaw/apps/warroom</string>
+
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+
+  <key>StandardOutPath</key><string>/Users/jay/Library/Logs/claudeclaw/warroom.out</string>
+  <key>StandardErrorPath</key><string>/Users/jay/Library/Logs/claudeclaw/warroom.err</string>
+</dict>
+</plist>

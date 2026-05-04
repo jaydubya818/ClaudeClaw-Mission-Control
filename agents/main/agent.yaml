@@ -1,0 +1,29 @@
+# Main — Hand of the King (Triage & Delegation)
+# V3 page 6: each agent = agent.yaml (model + tools) + CLAUDE.md (persona)
+
+name: main
+role: triage_and_delegate
+model: claude-opus-4-6
+voice: Charon          # British male, informative, confident (warroom/voices.yaml)
+
+tools:
+  - delegate           # spawn sub-agent task on Comms/Content/Ops/Research
+  - hive_query         # read-only access to hive_mind table
+  - bash               # rare; only for self-contained quick answers
+  - skill              # invoke any skill from skills/
+
+allowlist:
+  hive_mind: read
+  hive_mind_write: false   # Main does not write on others' behalf
+
+obsidian_vault: vault/Main/
+
+escalation:
+  cost_per_turn_threshold: 0.50    # USD; ask before exceeding
+  delegate_unsure: true            # if confidence < 0.7, route to specialist
+
+hive_write_format: |
+  agent=main
+  task=<one-line>
+  outcome=<delegated|answered|escalated>
+  routed_to=<agent or null>

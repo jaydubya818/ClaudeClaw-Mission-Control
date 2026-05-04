@@ -1,0 +1,60 @@
+# Named missions — fired by scheduler/runner.ts on cron.
+# Each mission enqueues a message to the target agent via the bridge queue.
+
+missions:
+  - name: morning_brief
+    schedule: "0 7 * * *"         # 07:00 daily
+    agent: main
+    prompt: |
+      Pull today's calendar + unread Gmail (last 12h) + overnight hive_mind summary.
+      Deliver a 5-bullet morning brief via Telegram.
+
+  - name: inbox_triage
+    schedule: "0 9,13,17 * * *"   # 3x daily
+    agent: comms
+    prompt: |
+      Triage inbox into {urgent, needs-response, fyi-archived}. Draft replies for urgent only.
+
+  - name: weekly_ops_review
+    schedule: "0 8 * * 1"         # Monday 08:00
+    agent: ops
+    prompt: |
+      Produce weekly financial summary: income, expenses, net, top 5 categories,
+      anomalies, recommended actions. Reference hive_mind for context.
+
+  - name: research_digest
+    schedule: "0 18 * * 5"        # Friday 18:00
+    agent: research
+    prompt: |
+      Summarize the week's research memos into a 3-paragraph digest.
+
+  - name: content_prompt
+    schedule: "30 10 * * *"       # 10:30 daily
+    agent: content
+    prompt: |
+      Propose 3 YouTube video ideas based on this week's hive_mind activity
+      and trending topics in my Obsidian Content vault.
+
+  # V3 transcript ch.6 — Meta Ads daily brief
+  - name: meta_ads_brief
+    schedule: "30 7 * * *"        # 07:30 daily
+    agent: ops
+    prompt: |
+      Invoke the meta-ads skill for period=yesterday. Deliver the brief via
+      Telegram with the standard format (winners, losers, blind spots, quick take).
+
+  # V3 transcript ch.14 — weekly insights digest
+  - name: weekly_insights
+    schedule: "0 9 * * 0"         # Sunday 09:00
+    agent: research
+    prompt: |
+      Invoke the insights skill for period=7d. Surface the top 3 contradictions
+      or recurring blockers from the last week. Deliver as a research memo.
+
+  # V3 transcript ch.11 — agent suggestions sweep
+  - name: weekly_agent_suggestions
+    schedule: "0 17 * * 5"        # Friday 17:00
+    agent: main
+    prompt: |
+      Invoke the suggestions skill for period=7d. If a split is recommended
+      with confidence > 0.7, ping Jay; otherwise stay silent.

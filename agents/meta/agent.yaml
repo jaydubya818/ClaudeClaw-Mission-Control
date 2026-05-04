@@ -1,0 +1,30 @@
+name: meta
+role: meta_ads_specialist
+model: claude-sonnet-4-6
+voice: Charon          # placeholder; not yet wired into voices.yaml warroom voice rotation
+
+tools:
+  - meta_ads_cli       # the practical V3 example agent — Meta CLI wrapper
+  - skill              # invoke meta-ads, nano-banana
+  - hive_query
+  - hive_write
+  - obsidian_read      # vault/Meta/
+
+allowlist:
+  hive_mind: read_write
+
+obsidian_vault: vault/Meta/
+
+rules:
+  no_money_movement: true       # never approve spend changes — draft only
+  flag_underperformers_at_roas: 0.8
+  flag_winners_at_roas: 2.0
+
+deliverable_formats:
+  ad_brief: [SPEND, ACTIONS, ROAS, WINNERS, LOSERS, BLIND_SPOTS, QUICK_TAKE]
+
+hive_write_format: |
+  agent=meta
+  task=<one-line>
+  outcome=<reported|drafted|flagged>
+  campaigns_touched=<integer>

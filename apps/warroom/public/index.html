@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>War Room · ClaudeClaw</title>
+<style>
+  :root {
+    --bg:#0b0c10; --panel:#14161d; --panel2:#1a1d27; --muted:#8b93a7; --text:#e6e9f0;
+    --accent:#4aa3ff; --you:#4aa3ff; --agent:#3ddc97; --danger:#ef4444;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.4 -apple-system,sans-serif; display:grid; grid-template-rows: 48px 1fr 72px; height:100vh; }
+  header { display:flex; align-items:center; justify-content:space-between; padding:0 20px; border-bottom:1px solid #20232b; }
+  header h1 { margin:0; font-size:14px; color:var(--accent); letter-spacing:.2em; }
+  .mission-back { color:var(--muted); font-size:12px; cursor:pointer; text-decoration:none; }
+  main { display:grid; grid-template-columns: 240px 1fr; overflow:hidden; }
+  aside { background:var(--panel); border-right:1px solid #20232b; padding:16px 12px; overflow-y:auto; }
+  aside h3 { margin:0 0 10px; font-size:10px; text-transform:uppercase; color:var(--muted); letter-spacing:.1em; }
+  .agent { padding:10px 12px; border-radius:8px; margin-bottom:8px; cursor:pointer; display:flex; align-items:center; gap:10px; background:var(--panel2); }
+  .agent.active { background:linear-gradient(135deg,#2a1d4d,#14161d); border:1px solid var(--accent); }
+  .agent .dot { width:6px; height:6px; border-radius:50%; background:var(--agent); }
+  .agent .name { font-weight:600; font-size:13px; }
+  .agent .sub { color:var(--muted); font-size:11px; }
+  .agent .pin { margin-left:auto; font-size:9px; color:var(--accent); background:#2a1d4d; padding:2px 6px; border-radius:3px; letter-spacing:.08em; }
+  .chat { padding:16px 28px; overflow-y:auto; }
+  .msg { margin-bottom:14px; }
+  .role { font-size:10px; text-transform:uppercase; letter-spacing:.1em; font-weight:600; margin-bottom:2px; }
+  .role.you { color:var(--you); }
+  .role.agent { color:var(--agent); }
+  footer { display:flex; align-items:center; gap:12px; padding:0 20px; border-top:1px solid #20232b; background:var(--panel); }
+  .mic { width:48px; height:48px; border-radius:50%; background:#ef4444; border:0; color:#fff; font-size:18px; cursor:pointer; }
+  .mic.off { background:#2a2d37; }
+  .meter { flex:1; height:32px; background:var(--panel2); border-radius:6px; position:relative; overflow:hidden; }
+  .meter .bar { height:100%; width:0; background:linear-gradient(90deg,#3ddc97,#4aa3ff); transition:width .05s; }
+  .meter-label { position:absolute; left:10px; top:50%; transform:translateY(-50%); font-size:11px; color:var(--muted); letter-spacing:.1em; }
+  .mode { display:flex; background:var(--panel2); border-radius:6px; overflow:hidden; }
+  .mode button { background:transparent; color:var(--muted); border:0; padding:8px 14px; font:inherit; font-size:11px; letter-spacing:.1em; cursor:pointer; }
+  .mode button.on { background:var(--accent); color:#000; }
+  .end { background:#ef4444; color:#fff; border:0; padding:10px 18px; border-radius:6px; font:inherit; font-weight:600; cursor:pointer; }
+</style>
+</head>
+<body>
+  <header>
+    <a class="mission-back" href="/">← Mission Control</a>
+    <h1>WAR ROOM</h1>
+    <div class="mode">
+      <button class="on" id="m-direct">DIRECT</button>
+      <button id="m-handup">HAND UP</button>
+    </div>
+  </header>
+
+  <main>
+    <aside>
+      <h3>Your Team</h3>
+      <div id="agents"></div>
+      <h3 style="margin-top:20px">Meeting Mode</h3>
+      <p style="color:var(--muted); font-size:11px; margin:4px 0 0">
+        Direct: talk to the pinned agent. Hand Up: the team listens, best-fit answers.
+      </p>
+    </aside>
+    <div class="chat" id="chat"></div>
+  </main>
+
+  <footer>
+    <button class="end" onclick="end()">End Meeting</button>
+    <button class="mic" id="mic" onclick="toggleMic()">🎤</button>
+    <div class="meter">
+      <span class="meter-label">MIC</span>
+      <div class="bar" id="bar"></div>
+    </div>
+  </footer>
+
+<script src="/app.js"></script>
+</body>
+</html>

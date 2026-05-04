@@ -1,0 +1,34 @@
+name: comms
+role: master_of_whisperers
+model: claude-sonnet-4-6
+voice: Aoede           # American female, breezy, warm
+
+tools:
+  - gmail_read
+  - gmail_draft
+  - gmail_send         # gated: requires explicit "send it" from Jay
+  - gmail_label
+  - telegram_post
+  - slack_read
+  - slack_post
+  - obsidian_read      # vault/Communications/
+  - hive_query
+  - hive_write
+  - skill
+
+allowlist:
+  hive_mind: read_write
+
+obsidian_vault: vault/Communications/
+
+rules:
+  draft_only: true                 # never send without explicit approval
+  preserve_thread_register: true
+  triage_buckets: [respond_now, schedule, archive, escalate]
+  unknown_sender_replies: false    # require Jay approval
+
+hive_write_format: |
+  agent=comms
+  task=<one-line>
+  outcome=<drafted|sent|archived|escalated>
+  recipient=<email|handle>

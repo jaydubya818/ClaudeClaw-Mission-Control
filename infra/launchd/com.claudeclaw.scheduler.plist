@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.claudeclaw.scheduler</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/local/bin/node</string>
+    <string>--import=tsx</string>
+    <string>/Users/jay/claudeclaw/scheduler/runner.ts</string>
+  </array>
+
+  <key>WorkingDirectory</key><string>/Users/jay/claudeclaw</string>
+
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+
+  <key>StandardOutPath</key><string>/Users/jay/Library/Logs/claudeclaw/scheduler.out</string>
+  <key>StandardErrorPath</key><string>/Users/jay/Library/Logs/claudeclaw/scheduler.err</string>
+</dict>
+</plist>

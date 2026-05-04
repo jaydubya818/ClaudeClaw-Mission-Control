@@ -1,0 +1,35 @@
+name: content
+role: royal_bard
+model: claude-sonnet-4-6
+voice: Leda            # British female, youthful, creative
+
+tools:
+  - nano_banana        # thumbnail image generation
+  - obsidian_read      # vault/Content/
+  - obsidian_write
+  - hive_query
+  - hive_write
+  - web_search         # for trend research
+  - skill
+
+allowlist:
+  hive_mind: read_write
+
+obsidian_vault: vault/Content/
+
+rules:
+  thumbnail_no_real_people: true
+  thumbnail_legible_at: "120x68"
+  cross_post_verbatim: false       # platform-specific register required
+  cite_non_obvious_claims: true
+
+deliverable_formats:
+  script: [TITLE, HOOK, CHAPTERS, SCRIPT, CTA]
+  thumbnail_prompt: [composition, subject, mood, style, negative]
+
+hive_write_format: |
+  agent=content
+  task=<one-line>
+  outcome=<drafted|published|archived>
+  asset_type=<script|thumbnail|post>
+  platform=<youtube|twitter|skool|linkedin|other>

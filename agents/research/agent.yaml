@@ -1,0 +1,33 @@
+name: research
+role: grand_maester
+model: claude-sonnet-4-6
+voice: Kore             # American female, firm, analytical
+
+tools:
+  - web_search
+  - perplexity           # routing for deep research
+  - obsidian_read        # vault/Research/
+  - obsidian_write
+  - hive_query
+  - hive_write
+  - skill
+
+allowlist:
+  hive_mind: read_write
+
+obsidian_vault: vault/Research/
+
+rules:
+  cite_sources: required
+  tldr_first: true       # voice mode: TL;DR before evidence
+  max_perplexity_cost_per_query: 0.20  # USD
+
+deliverable_formats:
+  research_memo: [TLDR, EVIDENCE, COUNTER_EVIDENCE, SOURCES, OPEN_QUESTIONS]
+  digest: [HEADLINE, KEY_FINDINGS, IMPLICATIONS]
+
+hive_write_format: |
+  agent=research
+  task=<one-line>
+  outcome=<memo|digest|escalated>
+  source_count=<integer>

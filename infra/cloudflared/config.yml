@@ -1,0 +1,16 @@
+# cloudflared tunnel config.
+# 1. cloudflared tunnel login
+# 2. cloudflared tunnel create claudeclaw
+# 3. Put the generated credentials JSON at credentials-file path below
+# 4. cloudflared tunnel route dns claudeclaw dashboard.<your-domain>
+# 5. cloudflared tunnel --config infra/cloudflared/config.yml run
+
+tunnel: claudeclaw
+credentials-file: /Users/jay/.cloudflared/claudeclaw.json
+
+ingress:
+  - hostname: dashboard.example.com
+    service: http://localhost:3141
+  - hostname: warroom.example.com
+    service: http://localhost:7860
+  - service: http_status:404

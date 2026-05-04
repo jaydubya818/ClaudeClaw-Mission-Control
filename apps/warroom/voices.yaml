@@ -1,0 +1,20 @@
+# Per-agent Gemini Live voice config. Main keeps Charon unless overridden.
+agents:
+  main:
+    voice: Charon      # British male, informative, confident
+    style: crisp, 1-2 sentences for voice
+  comms:
+    voice: Aoede       # American female, breezy, warm
+    style: conversational
+  content:
+    voice: Leda        # British female, youthful, creative
+    style: playful but not silly
+  ops:
+    voice: Alnilam     # American male, firm, direct
+    style: short declarative sentences
+  research:
+    voice: Kore        # American female, firm, analytical
+    style: TL;DR-first; point to written memo
+  meta:
+    voice: Charon      # British male, informative — reuses Main's voice for now
+    style: numerate, link-heavy, short

@@ -1,0 +1,16 @@
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+.env
+store/*.db
+store/*.db-*
+security/allowlist.json
+security/audit.log
+obsidian/
+dist/
+.DS_Store
+
+# Sandbox-only / local development artifacts
+store/test.txt
+.venv/

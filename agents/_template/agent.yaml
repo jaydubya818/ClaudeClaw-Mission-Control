@@ -1,0 +1,25 @@
+# V3 page 14 — copy this folder, rename, edit yaml + CLAUDE.md, register. Live in 90 seconds.
+name: <agent_name>
+role: <one_line_role>
+model: claude-sonnet-4-6     # or claude-opus-4-6 for triage/heavy reasoning
+voice: <gemini_live_voice>   # see warroom/voices.yaml for available voices
+
+tools:
+  - hive_query
+  - hive_write
+  - skill
+  # add tool names from your allowlist here
+
+allowlist:
+  hive_mind: read_write
+
+obsidian_vault: vault/<AgentName>/
+
+rules: []
+
+hard_refusals: []
+
+hive_write_format: |
+  agent=<agent_name>
+  task=<one-line>
+  outcome=<status>

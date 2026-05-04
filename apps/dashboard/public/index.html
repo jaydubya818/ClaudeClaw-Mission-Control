@@ -1,0 +1,1483 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ClaudeClaw — Mission Control</title>
+<style>
+  /* ---------- Design tokens (match V3 screenshots) ---------- */
+  :root {
+    --bg: #0a0b10;
+    --panel: #11131a;
+    --panel-2: #161922;
+    --border: #1d2030;
+    --border-2: #262a3c;
+    --text: #e6e9f0;
+    --muted: #8b93a7;
+    --muted-2: #5b6378;
+    --accent: #8b7cff;
+    --accent-2: #b388ff;
+    --ok: #3ddc97;
+    --warn: #f5b041;
+    --err: #ff6b6b;
+    --blue: #4aa3ff;
+    --pink: #ff7ac0;
+    --green: #6ee7b7;
+    --orange: #fb923c;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  a { color: var(--accent-2); text-decoration: none; }
+  button { font: inherit; }
+
+  /* ---------- App shell ---------- */
+  .app { display: grid; grid-template-columns: 240px 1fr; height: 100vh; }
+  .sidebar {
+    background: var(--panel); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    overflow-y: auto;
+  }
+  .ws-switcher {
+    padding: 14px 16px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 10px;
+    cursor: pointer;
+  }
+  .ws-switcher .ws-icon { width: 22px; height: 22px; border-radius: 5px; background: var(--blue); }
+  .ws-switcher .ws-name { font-weight: 600; flex: 1; }
+  .ws-switcher .ws-chev { color: var(--muted); }
+  .search-box {
+    margin: 10px 12px; padding: 7px 10px; border-radius: 7px;
+    background: var(--panel-2); display: flex; align-items: center; gap: 8px;
+    color: var(--muted); font-size: 13px; cursor: text;
+  }
+  .search-box .kbd { margin-left: auto; font-size: 11px; color: var(--muted-2); }
+  .nav-section { margin: 8px 0 4px; }
+  .nav-section .label {
+    color: var(--muted); font-size: 11px; padding: 6px 16px 4px;
+    text-transform: uppercase; letter-spacing: .04em;
+    display: flex; align-items: center; gap: 6px; cursor: pointer;
+  }
+  .nav-section .label .chev { font-size: 9px; }
+  .nav-link {
+    display: flex; align-items: center; gap: 10px;
+    padding: 7px 16px; color: var(--muted); cursor: pointer;
+    border-left: 2px solid transparent;
+    font-size: 14px;
+  }
+  .nav-link:hover { color: var(--text); background: rgba(255,255,255,.02); }
+  .nav-link.active {
+    color: var(--accent-2); border-left-color: var(--accent-2);
+    background: rgba(139,124,255,.08);
+  }
+  .nav-link .ico { width: 16px; display: inline-block; text-align: center; opacity: .8; font-size: 13px; }
+
+  /* ---------- Main area ---------- */
+  .main {
+    overflow-y: auto; display: flex; flex-direction: column;
+  }
+  .page-header {
+    display: flex; align-items: center; gap: 16px;
+    padding: 18px 28px; border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; background: var(--bg); z-index: 5;
+  }
+  .page-header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+  .page-header .header-actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+  .page-body { padding: 20px 28px 60px; }
+
+  /* ---------- Buttons / inputs ---------- */
+  .btn {
+    background: var(--panel-2); color: var(--text);
+    border: 1px solid var(--border-2); padding: 7px 14px;
+    border-radius: 7px; cursor: pointer; font-size: 13px;
+  }
+  .btn:hover { background: #1c2030; }
+  .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn.primary:hover { background: #7867e8; }
+  .btn.danger { color: var(--err); border-color: rgba(255,107,107,.3); }
+  .btn.ghost { background: transparent; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .btn.sm { padding: 4px 10px; font-size: 12px; }
+  input, textarea, select {
+    background: var(--panel-2); color: var(--text);
+    border: 1px solid var(--border-2); padding: 8px 10px;
+    border-radius: 7px; font: inherit; outline: none;
+  }
+  input:focus, textarea:focus, select:focus { border-color: var(--accent); }
+  textarea { resize: vertical; min-height: 80px; font-family: inherit; }
+  .muted { color: var(--muted); }
+  .pill { padding: 2px 8px; border-radius: 4px; font-size: 11px; }
+  .pill.live { background: rgba(61,220,151,.12); color: var(--ok); }
+  .pill.stopped { background: rgba(139,147,167,.12); color: var(--muted); }
+  .pill.success { background: rgba(61,220,151,.12); color: var(--ok); }
+  .pill.fail { background: rgba(255,107,107,.12); color: var(--err); }
+  .pill.active { background: rgba(74,163,255,.12); color: var(--blue); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+  .dot.ok { background: var(--ok); }
+  .dot.warn { background: var(--warn); }
+  .dot.err { background: var(--err); }
+
+  /* ---------- Mission Control kanban ---------- */
+  .kanban-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+  .kanban-counts { color: var(--muted); font-size: 13px; margin-right: auto; }
+  .kanban {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 14px; align-items: start;
+  }
+  .kanban-col {
+    background: var(--panel); border-radius: 10px;
+    border: 1px solid var(--border); padding: 12px; min-height: 200px;
+  }
+  .kanban-col-header {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
+    padding-bottom: 10px; border-bottom: 1px solid var(--border);
+  }
+  .kanban-col-header .agent-avatar {
+    width: 26px; height: 26px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), var(--pink));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; color: #fff;
+  }
+  .kanban-col-header .col-name { font-weight: 600; flex: 1; }
+  .kanban-col-header .col-count { color: var(--muted); font-size: 12px; }
+  .kanban-col-header .live-dot { color: var(--ok); font-size: 10px; }
+  .kanban-card {
+    background: var(--panel-2); border-radius: 8px;
+    border: 1px solid var(--border-2); padding: 10px;
+    margin-bottom: 8px; cursor: grab;
+  }
+  .kanban-card .meta { color: var(--muted); font-size: 11px; margin-bottom: 4px; display: flex; gap: 8px; }
+  .kanban-card .title { font-size: 13px; margin-bottom: 8px; }
+  .kanban-card .row {
+    display: flex; gap: 6px; align-items: center;
+  }
+  .kanban-card select { flex: 1; padding: 4px 8px; font-size: 11px; }
+  .kanban-empty { color: var(--muted-2); font-size: 12px; padding: 12px 4px; text-align: center; }
+
+  /* ---------- Agents grid ---------- */
+  .agents-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+  .agent-card {
+    background: var(--panel); border-radius: 10px; border: 1px solid var(--border); padding: 14px;
+    transition: border-color .15s;
+  }
+  .agent-card:hover { border-color: var(--border-2); }
+  .agent-card .head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .agent-card .ava {
+    width: 38px; height: 38px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; color: #fff;
+  }
+  .agent-card .name { font-weight: 600; }
+  .agent-card .name small { color: var(--muted); margin-left: 6px; font-weight: 400; font-size: 11px; }
+  .agent-card .desc { color: var(--muted); font-size: 12px; min-height: 32px; margin-bottom: 12px; }
+  .agent-card .row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .agent-card select.model { padding: 4px 8px; font-size: 12px; }
+  .agent-card .turns { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; margin-top: 8px; }
+  .agent-card .turns-n { font-size: 18px; font-weight: 600; }
+  .agent-card .actions { display: flex; gap: 6px; align-items: center; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); }
+  .agent-card .actions .icon-btn {
+    background: transparent; border: 1px solid var(--border-2); color: var(--muted);
+    width: 28px; height: 28px; border-radius: 6px; cursor: pointer; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .agent-card .actions .icon-btn:hover { color: var(--text); border-color: var(--accent); }
+
+  /* Avatar palette per agent */
+  .ava-main    { background: linear-gradient(135deg, #4aa3ff, #6c5ce7); }
+  .ava-meta    { background: linear-gradient(135deg, #6366f1, #2563eb); }
+  .ava-comms   { background: linear-gradient(135deg, #ec4899, #db2777); }
+  .ava-content { background: linear-gradient(135deg, #f59e0b, #d97706); }
+  .ava-ops     { background: linear-gradient(135deg, #10b981, #059669); }
+  .ava-research{ background: linear-gradient(135deg, #8b5cf6, #6d28d9); }
+
+  /* ---------- Scheduled list + editor ---------- */
+  .sched-list { background: var(--panel); border-radius: 10px; border: 1px solid var(--border); }
+  .sched-row {
+    display: grid; grid-template-columns: 28px 1fr 220px 90px 90px 60px;
+    gap: 14px; align-items: center; padding: 12px 16px;
+    border-top: 1px solid var(--border);
+  }
+  .sched-row:first-child { border-top: 0; }
+  .sched-row .name { font-weight: 600; }
+  .sched-row .preview { color: var(--muted); font-size: 12px; margin-top: 2px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sched-row .when { color: var(--muted); font-size: 12px; }
+  .sched-row .agent-tag { color: var(--accent-2); font-size: 12px; }
+
+  /* Modal */
+  .modal-bg {
+    position: fixed; inset: 0; background: rgba(0,0,0,.7); backdrop-filter: blur(2px);
+    display: none; align-items: center; justify-content: center; z-index: 100;
+  }
+  .modal-bg.open { display: flex; }
+  .modal {
+    background: var(--panel); border-radius: 12px; border: 1px solid var(--border-2);
+    width: 600px; max-width: 95vw; max-height: 90vh; overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0,0,0,.6);
+  }
+  .modal-head { padding: 18px 22px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+  .modal-head h2 { margin: 0; font-size: 16px; flex: 1; }
+  .modal-head .x { background: transparent; border: 0; color: var(--muted); font-size: 18px; cursor: pointer; }
+  .modal-body { padding: 18px 22px; }
+  .modal-foot { padding: 14px 22px; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px; }
+  .field input, .field textarea, .field select { width: 100%; }
+  .seg { display: inline-flex; background: var(--panel-2); border: 1px solid var(--border-2); border-radius: 7px; overflow: hidden; }
+  .seg button { background: transparent; color: var(--muted); border: 0; padding: 7px 14px; cursor: pointer; font-size: 12px; }
+  .seg button.on { background: var(--accent); color: #fff; }
+  .chip-row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip {
+    padding: 5px 10px; border-radius: 6px; background: var(--panel-2);
+    border: 1px solid var(--border-2); font-size: 12px; cursor: pointer;
+  }
+  .chip:hover { border-color: var(--accent); }
+  .chip.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .time-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 10px; background: var(--panel-2); border: 1px solid var(--border-2);
+    border-radius: 6px; font-size: 12px; font-family: ui-monospace, monospace;
+  }
+  .time-chip .x { background: transparent; border: 0; color: var(--muted); cursor: pointer; padding: 0; font-size: 14px; }
+
+  /* ---------- Hive Mind ---------- */
+  .hive-tabs { display: flex; gap: 6px; padding: 0 28px; border-bottom: 1px solid var(--border); }
+  .hive-tab {
+    padding: 10px 14px; color: var(--muted); cursor: pointer; font-size: 13px;
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  .hive-tab.active { color: var(--text); border-bottom-color: var(--accent); }
+  .hive-list { background: var(--panel); border-radius: 10px; border: 1px solid var(--border); overflow: hidden; }
+  .hive-list-row {
+    display: grid; grid-template-columns: 110px 110px 160px 1fr;
+    gap: 14px; align-items: center; padding: 12px 16px;
+    border-top: 1px solid var(--border);
+    color: var(--text); font-size: 13px;
+  }
+  .hive-list-row:first-child { border-top: 0; background: var(--panel-2); color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; padding: 8px 16px; }
+  .hive-list-row .col-when { color: var(--muted); }
+  .hive-list-row .col-summary { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .agent-tag-pill { font-size: 12px; }
+  .agent-tag-pill .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+  .agent-tag-pill[data-agent="main"] .dot     { background: var(--blue); }
+  .agent-tag-pill[data-agent="meta"] .dot     { background: var(--accent); }
+  .agent-tag-pill[data-agent="comms"] .dot    { background: var(--pink); }
+  .agent-tag-pill[data-agent="content"] .dot  { background: var(--orange); }
+  .agent-tag-pill[data-agent="ops"] .dot      { background: var(--green); }
+  .agent-tag-pill[data-agent="research"] .dot { background: var(--accent-2); }
+  #hive-graph { background: var(--panel); border-radius: 10px; border: 1px solid var(--border); height: 480px; }
+  .brain-3d-placeholder { background: var(--panel); border-radius: 10px; border: 1px solid var(--border); height: 480px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--muted); text-align: center; padding: 24px; }
+  .brain-3d-placeholder .icon { font-size: 48px; margin-bottom: 12px; opacity: .4; }
+
+  /* ---------- Memories ---------- */
+  .mem-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .panel { background: var(--panel); border-radius: 10px; border: 1px solid var(--border); padding: 14px; }
+  .panel h3 { margin: 0 0 12px; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .dist-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .dist-label { width: 64px; color: var(--muted); font-size: 11px; font-family: ui-monospace, monospace; }
+  .dist-bar { flex: 1; background: var(--panel-2); border-radius: 3px; height: 14px; overflow: hidden; }
+  .dist-bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); transition: width .3s; }
+  .dist-count { width: 36px; text-align: right; color: var(--muted); font-size: 11px; }
+  .pin-item { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .pin-item:last-child { border: 0; }
+  .pin-scope { font-size: 10px; padding: 2px 6px; border-radius: 4px; background: var(--panel-2); color: var(--accent-2); white-space: nowrap; }
+  .pin-content { flex: 1; font-size: 12px; }
+  .pin-del { background: transparent; border: 0; color: var(--err); cursor: pointer; opacity: .5; }
+  .pin-del:hover { opacity: 1; }
+  .insight-card { background: var(--panel); padding: 12px 14px; border-radius: 8px; border: 1px solid var(--border); border-left: 3px solid var(--ok); margin-bottom: 8px; }
+  .insight-conf { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+
+  /* ---------- Chat ---------- */
+  .chat-filter { display: flex; gap: 6px; padding: 0 28px 14px; flex-wrap: wrap; }
+  .chat-feed { background: var(--panel); border-radius: 10px; border: 1px solid var(--border); padding: 14px; max-width: 900px; }
+  .chat-msg { padding: 10px 0; border-top: 1px solid var(--border); }
+  .chat-msg:first-child { border: 0; }
+  .chat-head { display: flex; gap: 8px; align-items: center; margin-bottom: 4px; }
+  .chat-prompt { color: var(--muted); font-size: 12px; }
+  .chat-reply { font-size: 13px; white-space: pre-wrap; word-wrap: break-word; margin-top: 4px; }
+
+  /* ---------- Audit / Usage ---------- */
+  .audit-row { display: grid; grid-template-columns: 100px 90px 200px 1fr; gap: 14px; align-items: center; padding: 8px 16px; border-top: 1px solid var(--border); font-size: 12px; }
+  .audit-row:first-child { border: 0; background: var(--panel-2); color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; padding: 8px 16px; }
+  .audit-row .corr { font-family: ui-monospace, monospace; color: var(--muted-2); font-size: 11px; }
+
+  /* ---------- Toast ---------- */
+  .toast {
+    position: fixed; bottom: 20px; right: 20px;
+    background: var(--panel); border-left: 3px solid var(--ok);
+    padding: 12px 18px; border-radius: 7px;
+    box-shadow: 0 4px 24px rgba(0,0,0,.5);
+    opacity: 0; transition: opacity .2s; pointer-events: none;
+    z-index: 200;
+  }
+  .toast.show { opacity: 1; }
+  .toast.err { border-left-color: var(--err); }
+
+  .empty { padding: 32px; text-align: center; color: var(--muted); font-size: 13px; }
+  .badge { background: var(--accent); color: #fff; font-size: 10px; padding: 2px 6px; border-radius: 4px; margin-left: 6px; }
+
+  /* tiny utility */
+  .row { display: flex; gap: 8px; align-items: center; }
+  .grow { flex: 1; }
+  .gap-12 { gap: 12px; }
+  .mt-12 { margin-top: 12px; }
+</style>
+</head>
+<body>
+<script src="https://unpkg.com/cytoscape@3.30.2/dist/cytoscape.min.js"></script>
+
+<div class="app">
+  <!-- ============== SIDEBAR ============== -->
+  <aside class="sidebar">
+    <div class="ws-switcher">
+      <div class="ws-icon"></div>
+      <div class="ws-name">Mark's Lab</div>
+      <span class="ws-chev">▾</span>
+    </div>
+    <div class="search-box">
+      <span>🔍</span>
+      <span>Search</span>
+      <span class="kbd">⌘K</span>
+    </div>
+
+    <div class="nav-section">
+      <div class="label"><span class="chev">▾</span> WORKSPACE</div>
+      <div class="nav-link" data-route="mission"><span class="ico">⊞</span> Mission Control</div>
+      <div class="nav-link" data-route="scheduled"><span class="ico">⏱</span> Scheduled</div>
+      <div class="nav-link" data-route="agents"><span class="ico">⚐</span> Agents</div>
+      <div class="nav-link" data-route="chat"><span class="ico">▢</span> Chat</div>
+    </div>
+
+    <div class="nav-section">
+      <div class="label"><span class="chev">▾</span> INTELLIGENCE</div>
+      <div class="nav-link" data-route="memories"><span class="ico">⊕</span> Memories</div>
+      <div class="nav-link" data-route="hive"><span class="ico">⌘</span> Hive Mind</div>
+      <div class="nav-link" data-route="usage"><span class="ico">∿</span> Usage</div>
+      <div class="nav-link" data-route="audit"><span class="ico">⊙</span> Audit</div>
+    </div>
+
+    <div class="nav-section">
+      <div class="label"><span class="chev">▾</span> COLLABORATE</div>
+      <div class="nav-link" data-route="warroom"><span class="ico">✕</span> War Room <span id="wr-status-dot"></span></div>
+    </div>
+
+    <div class="nav-section" style="margin-top:auto">
+      <div class="label"><span class="chev">▾</span> CONFIGURE</div>
+      <div class="nav-link" data-route="settings"><span class="ico">⚙</span> Settings</div>
+    </div>
+  </aside>
+
+  <!-- ============== MAIN ============== -->
+  <main class="main" id="main">
+    <!-- pages render here -->
+  </main>
+</div>
+
+<div class="modal-bg" id="modal-bg" onclick="if(event.target===this)closeModal()">
+  <div class="modal" id="modal"></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================================
+// Tiny SPA framework — hash routing + page registry.
+// ============================================================================
+const $ = (sel, ctx=document) => ctx.querySelector(sel);
+const $$ = (sel, ctx=document) => [...ctx.querySelectorAll(sel)];
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ago = ts => {
+  const d = Math.floor(Date.now()/1000) - ts;
+  if (d < 60) return d + 's ago';
+  if (d < 3600) return Math.floor(d/60) + 'm ago';
+  if (d < 86400) return Math.floor(d/3600) + 'h ago';
+  if (d < 86400*7) return Math.floor(d/86400) + 'd ago';
+  if (d < 86400*30) return Math.floor(d/(86400*7)) + 'w ago';
+  return Math.floor(d/(86400*30)) + 'mo ago';
+};
+function toast(msg, kind) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (kind === 'err' ? ' err' : '');
+  setTimeout(() => t.className = 'toast' + (kind === 'err' ? ' err' : ''), 2500);
+}
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  if (!r.ok) throw new Error(`${path} ${r.status}`);
+  return r.json();
+}
+function openModal(html) {
+  $('#modal').innerHTML = html;
+  $('#modal-bg').classList.add('open');
+}
+function closeModal() { $('#modal-bg').classList.remove('open'); }
+
+const AGENTS = ['main', 'meta', 'comms', 'content', 'ops', 'research'];
+const AGENT_DESCS = {
+  main: 'Triage and delegation. Routes 9/10 requests.',
+  meta: 'Helps break down performance for Meta ads.',
+  comms: 'All textual communication — email, Slack, Telegram.',
+  content: 'YouTube scripts, LinkedIn posts, carousels, content calendar.',
+  ops: 'Calendar, scheduling, billing, Stripe, admin, task management.',
+  research: 'Deep web research, academic sources, competitive intel, trend analysis.',
+};
+
+// ----- Router -----
+const routes = {
+  mission: renderMission,
+  scheduled: renderScheduled,
+  agents: renderAgents,
+  chat: renderChat,
+  memories: renderMemories,
+  hive: renderHive,
+  usage: renderUsage,
+  audit: renderAudit,
+  warroom: renderWarRoom,
+  settings: renderSettings,
+};
+function navigate() {
+  const r = (location.hash.slice(1) || 'mission');
+  $$('.nav-link').forEach(el => el.classList.toggle('active', el.dataset.route === r));
+  const fn = routes[r] || routes.mission;
+  fn();
+}
+window.addEventListener('hashchange', navigate);
+$$('.nav-link').forEach(el => {
+  el.addEventListener('click', () => location.hash = '#' + el.dataset.route);
+});
+
+// ============================================================================
+// PAGE: Mission Control (kanban — V3 transcript ch.7)
+// ============================================================================
+async function renderMission() {
+  $('#main').innerHTML = `
+    <div class="page-header">
+      <h1>Mark's Lab · Tasks</h1>
+      <div class="kanban-counts" id="km-counts">…</div>
+      <div class="header-actions">
+        <button class="btn ghost"><span>⊞</span> Layout</button>
+        <button class="btn ghost"><span>⟲</span> History</button>
+        <button class="btn ghost" onclick="autoAssignAll()">✦ Auto-assign all</button>
+        <button class="btn primary" onclick="newTaskModal()">+ New Task</button>
+      </div>
+    </div>
+    <div class="page-body">
+      <div class="kanban" id="kanban">Loading…</div>
+    </div>
+  `;
+  await refreshKanban();
+}
+
+async function refreshKanban() {
+  try {
+    const [{ rows }, { agents }] = await Promise.all([
+      api('/api/tasks'),
+      api('/api/agents'),
+    ]);
+    const cols = ['inbox', ...agents.map(a => a.name)];
+    const byCol = Object.fromEntries(cols.map(c => [c, []]));
+    let live = 0, unassigned = 0;
+    for (const t of rows) {
+      if (t.status === 'done' || t.status === 'failed') continue;
+      if (t.agent && byCol[t.agent]) byCol[t.agent].push(t);
+      else { byCol.inbox.push(t); unassigned++; }
+      if (t.status === 'live') live++;
+    }
+    $('#km-counts').textContent =
+      `${live} active · ${unassigned} unassigned · ${rows.length} total`;
+    $('#kanban').innerHTML = cols.map(col => {
+      const isInbox = col === 'inbox';
+      const tasks = byCol[col];
+      const agentInfo = agents.find(a => a.name === col);
+      return `
+        <div class="kanban-col">
+          <div class="kanban-col-header">
+            ${isInbox
+              ? '<div class="ava ava-main" style="width:24px;height:24px;font-size:10px">📥</div>'
+              : `<div class="agent-avatar ava-${col}">${col[0].toUpperCase()}</div>`}
+            <div class="col-name">${isInbox ? 'Inbox' : col[0].toUpperCase()+col.slice(1)}</div>
+            <div class="col-count">${tasks.length}</div>
+            ${!isInbox ? `<div class="live-dot">●</div>` : ''}
+          </div>
+          ${tasks.length ? tasks.map(t => `
+            <div class="kanban-card" data-id="${t.id}">
+              <div class="meta">
+                <span>${esc(t.agent || 'unassigned')}</span>
+                <span>${ago(t.created_at)}</span>
+              </div>
+              <div class="title">${esc(t.title)}</div>
+              <div class="row">
+                ${!t.agent ? `<button class="btn sm ghost" onclick="autoAssign(${t.id})">✦ Auto</button>` : ''}
+                <select onchange="manualAssign(${t.id}, this.value)">
+                  <option value="">${t.agent ? 'Reassign…' : 'Assign to…'}</option>
+                  ${AGENTS.map(a => `<option value="${a}" ${t.agent===a?'selected':''}>${a}</option>`).join('')}
+                </select>
+                <button class="btn sm ghost danger" onclick="deleteTask(${t.id})" title="Delete">🗑</button>
+              </div>
+              ${t.status === 'queued' ? `<div class="row" style="margin-top:6px"><button class="btn sm" onclick="setTaskStatus(${t.id},'live')">Set live</button></div>` : ''}
+              ${t.status === 'live' ? `<div class="row" style="margin-top:6px"><button class="btn sm" onclick="setTaskStatus(${t.id},'done')">Mark done</button></div>` : ''}
+            </div>
+          `).join('') : '<div class="kanban-empty">No tasks</div>'}
+        </div>
+      `;
+    }).join('');
+  } catch (e) {
+    $('#kanban').innerHTML = `<div class="empty">Error: ${esc(e.message)}</div>`;
+  }
+}
+
+async function autoAssign(id) {
+  try {
+    const r = await api(`/api/tasks/${id}/auto-assign`, { method: 'POST' });
+    toast(`#${id} → ${r.agent ?? r.error}`, r.error ? 'err' : 'ok');
+    refreshKanban();
+  } catch (e) { toast('auto-assign failed: ' + e.message, 'err'); }
+}
+async function manualAssign(id, agent) {
+  if (!agent) return;
+  try {
+    await api(`/api/tasks/${id}/assign`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ agent }),
+    });
+    toast(`#${id} → ${agent}`);
+    refreshKanban();
+  } catch (e) { toast('assign failed: ' + e.message, 'err'); }
+}
+async function setTaskStatus(id, status) {
+  try {
+    await api(`/api/tasks/${id}/status`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
+    refreshKanban();
+  } catch (e) { toast(e.message, 'err'); }
+}
+async function deleteTask(id) {
+  // No DELETE route yet; soft-delete via status='done'
+  await setTaskStatus(id, 'done');
+}
+async function autoAssignAll() {
+  const { rows } = await api('/api/tasks');
+  const todo = rows.filter(t => !t.agent && t.status === 'queued');
+  for (const t of todo) await autoAssign(t.id);
+  toast(`auto-assigned ${todo.length}`);
+}
+function newTaskModal() {
+  openModal(`
+    <div class="modal-head">
+      <h2>New task</h2>
+      <button class="x" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Title</label>
+        <input id="nt-title" placeholder="What needs doing?" />
+      </div>
+      <div class="field">
+        <label>Description (optional)</label>
+        <textarea id="nt-desc" rows="3" placeholder="Context, links, deliverable…"></textarea>
+      </div>
+      <div class="field">
+        <label>Priority</label>
+        <select id="nt-pri">
+          <option>low</option><option selected>medium</option><option>high</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn primary" onclick="createNewTask(false)">Create</button>
+      <button class="btn primary" onclick="createNewTask(true)">Create + Auto-assign</button>
+    </div>
+  `);
+  setTimeout(() => $('#nt-title')?.focus(), 50);
+}
+async function createNewTask(autoassign) {
+  const title = $('#nt-title').value.trim();
+  if (!title) return toast('title required', 'err');
+  try {
+    const r = await api('/api/tasks', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        title,
+        description: $('#nt-desc').value,
+        priority: $('#nt-pri').value,
+      }),
+    });
+    if (autoassign) await autoAssign(r.id);
+    closeModal();
+    refreshKanban();
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+// ============================================================================
+// PAGE: Scheduled (V3 transcript ch.10)
+// ============================================================================
+async function renderScheduled() {
+  $('#main').innerHTML = `
+    <div class="page-header">
+      <h1>Scheduled</h1>
+      <div class="header-actions">
+        <span class="muted" id="sched-count">…</span>
+        <button class="btn primary" onclick="schedEditModal()">+ New scheduled task</button>
+      </div>
+    </div>
+    <div class="page-body">
+      <div id="sched-yaml-section">
+        <h3 class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;margin:0 0 8px">Code-managed (cron.yaml)</h3>
+        <div class="sched-list" id="sched-yaml-list"><div class="empty">Loading…</div></div>
+      </div>
+      <h3 class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;margin:24px 0 8px">User-editable (database)</h3>
+      <div class="sched-list" id="sched-db-list"><div class="empty">Loading…</div></div>
+    </div>
+  `;
+  await Promise.all([refreshSchedYaml(), refreshSchedDb()]);
+}
+async function refreshSchedYaml() {
+  try {
+    const data = await api('/api/schedule');
+    if (!data.missions || !data.missions.length) {
+      $('#sched-yaml-list').innerHTML = '<div class="empty">No missions in cron.yaml.</div>';
+      return;
+    }
+    $('#sched-yaml-list').innerHTML = data.missions.map(m => `
+      <div class="sched-row">
+        <div></div>
+        <div>
+          <div class="name">${esc(m.name)}</div>
+          <div class="preview">${esc(m.prompt_preview)}${m.prompt_preview.length >= 200 ? '…' : ''}</div>
+        </div>
+        <div class="when">${esc(m.schedule_human)}</div>
+        <div><span class="pill ${data.enabled ? 'live' : 'stopped'}">${data.enabled ? 'enabled' : 'disabled'}</span></div>
+        <div><span class="agent-tag">@${esc(m.agent)}</span></div>
+        <div></div>
+      </div>
+    `).join('');
+  } catch (e) {
+    $('#sched-yaml-list').innerHTML = `<div class="empty">Error: ${esc(e.message)}</div>`;
+  }
+}
+async function refreshSchedDb() {
+  try {
+    const { rows } = await api('/api/scheduled');
+    $('#sched-count').textContent = `${rows.length} user-editable`;
+    if (!rows.length) {
+      $('#sched-db-list').innerHTML = '<div class="empty">No scheduled tasks yet. Click + New to add one.</div>';
+      return;
+    }
+    $('#sched-db-list').innerHTML = rows.map(r => `
+      <div class="sched-row">
+        <div></div>
+        <div>
+          <div class="name">${esc(r.name)}</div>
+          <div class="preview">${esc(r.prompt.slice(0, 200))}</div>
+        </div>
+        <div class="when">${esc(cronToEnglishClient(r.schedule))}</div>
+        <div><span class="pill ${r.enabled ? 'live' : 'stopped'}">${r.enabled ? 'active' : 'paused'}</span> ${r.last_status ? `<span class="pill ${r.last_status}">${r.last_status}</span>` : ''}</div>
+        <div><span class="agent-tag">@${esc(r.agent)}</span></div>
+        <div class="row">
+          <button class="btn sm ghost" onclick="schedEditModal(${r.id})" title="Edit">✎</button>
+          <button class="btn sm ghost" onclick="schedToggle(${r.id})" title="Toggle">${r.enabled ? '⏸' : '▶'}</button>
+          <button class="btn sm ghost" onclick="schedRunNow(${r.id})" title="Run now">⚡</button>
+          <button class="btn sm ghost danger" onclick="schedDelete(${r.id})" title="Delete">🗑</button>
+        </div>
+      </div>
+    `).join('');
+  } catch (e) {
+    $('#sched-db-list').innerHTML = `<div class="empty">Error: ${esc(e.message)}</div>`;
+  }
+}
+
+// ----- Scheduled editor modal (the friendly DAYS picker from screenshot 7) -----
+let _schedDraft = null;
+function schedEditModal(id) {
+  const isEdit = !!id;
+  _schedDraft = {
+    id, name: '', schedule: '0 9 * * *', agent: 'main', prompt: '', enabled: 1,
+    days_mode: 'every',  // every | weekdays | weekends | custom
+    custom_days: [1,2,3,4,5],
+    times: ['09:00'],
+  };
+  if (isEdit) {
+    api('/api/scheduled').then(({ rows }) => {
+      const r = rows.find(x => x.id === id);
+      if (!r) return;
+      _schedDraft = { ..._schedDraft, ...r };
+      const parsed = parseCron(r.schedule);
+      _schedDraft = { ..._schedDraft, ...parsed };
+      _renderSchedModal();
+    });
+  }
+  _renderSchedModal();
+}
+function _renderSchedModal() {
+  const d = _schedDraft;
+  openModal(`
+    <div class="modal-head">
+      <h2>${d.id ? 'Edit scheduled task' : 'New scheduled task'}</h2>
+      <button class="x" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Name</label>
+        <input id="sd-name" value="${esc(d.name)}" placeholder="meta_ads_brief" />
+      </div>
+      <div class="field">
+        <label>Prompt</label>
+        <textarea id="sd-prompt" rows="4" placeholder="Use the meta-ads-cli skill to pull today's…">${esc(d.prompt)}</textarea>
+      </div>
+      <div class="field">
+        <label>Schedule · times of day</label>
+        <div class="chip-row" id="sd-times">
+          ${d.times.map((t,i) => `
+            <span class="time-chip">${esc(t)} <button class="x" onclick="schedRemoveTime(${i})">✕</button></span>
+          `).join('')}
+          <input id="sd-newtime" type="time" style="width:120px" />
+          <button class="btn sm" onclick="schedAddTime()">+ Add time</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>Days</label>
+        <div class="seg" id="sd-days">
+          <button class="${d.days_mode==='every' ? 'on' : ''}" onclick="schedDays('every')">Every day</button>
+          <button class="${d.days_mode==='weekdays' ? 'on' : ''}" onclick="schedDays('weekdays')">Weekdays</button>
+          <button class="${d.days_mode==='weekends' ? 'on' : ''}" onclick="schedDays('weekends')">Weekends</button>
+          <button class="${d.days_mode==='custom' ? 'on' : ''}" onclick="schedDays('custom')">Custom</button>
+        </div>
+        ${d.days_mode === 'custom' ? `
+          <div class="chip-row" style="margin-top:8px">
+            ${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((n,i) => `
+              <span class="chip ${d.custom_days.includes(i) ? 'on' : ''}" onclick="schedToggleDay(${i})">${n}</span>
+            `).join('')}
+          </div>
+        ` : ''}
+      </div>
+      <div class="muted" style="font-size:12px">${esc(cronToEnglishClient(buildCronFromDraft()))} <span style="float:right"><a href="#" onclick="event.preventDefault(); schedAdvanced()">⚐ Advanced (cron)</a></span></div>
+      <div class="chip-row mt-12">
+        ${[
+          ['Daily 9am', '0 9 * * *'],
+          ['Weekdays 8am', '0 8 * * 1-5'],
+          ['Every Monday 9am', '0 9 * * 1'],
+          ['Every Sunday 6pm', '0 18 * * 0'],
+          ['Every 4 hours', '0 */4 * * *'],
+        ].map(([n,c]) => `<span class="chip" onclick="schedPreset('${c}')">${n}</span>`).join('')}
+      </div>
+      <div class="field" style="margin-top:18px">
+        <label>Agent</label>
+        <select id="sd-agent">
+          ${AGENTS.map(a => `<option value="${a}" ${d.agent===a?'selected':''}>@${a} · ${a[0].toUpperCase()+a.slice(1)}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn primary" onclick="schedSave()" id="sd-save">Save changes</button>
+    </div>
+  `);
+}
+function schedDays(mode) { _schedDraft.days_mode = mode; _renderSchedModal(); }
+function schedToggleDay(d) {
+  const arr = _schedDraft.custom_days;
+  const i = arr.indexOf(d);
+  if (i >= 0) arr.splice(i, 1); else arr.push(d);
+  _renderSchedModal();
+}
+function schedAddTime() {
+  const v = $('#sd-newtime').value;
+  if (!/^\d{2}:\d{2}$/.test(v)) return toast('use HH:MM', 'err');
+  _schedDraft.times.push(v); _renderSchedModal();
+}
+function schedRemoveTime(i) { _schedDraft.times.splice(i,1); _renderSchedModal(); }
+function schedPreset(cron) {
+  Object.assign(_schedDraft, parseCron(cron));
+  _schedDraft.schedule = cron;
+  _renderSchedModal();
+}
+function schedAdvanced() {
+  const cur = buildCronFromDraft();
+  const v = prompt('Cron expression (5 fields):', cur);
+  if (v && /^\S+\s+\S+\s+\S+\s+\S+\s+\S+$/.test(v)) {
+    Object.assign(_schedDraft, parseCron(v));
+    _renderSchedModal();
+  }
+}
+function buildCronFromDraft() {
+  const d = _schedDraft;
+  // pick first time (cron supports multiple but we encode only first when DB-driven)
+  const t = d.times[0] || '09:00';
+  const [hh, mm] = t.split(':');
+  const dow = d.days_mode === 'every' ? '*'
+    : d.days_mode === 'weekdays' ? '1-5'
+    : d.days_mode === 'weekends' ? '0,6'
+    : (d.custom_days.length ? d.custom_days.sort().join(',') : '*');
+  return `${parseInt(mm)} ${parseInt(hh)} * * ${dow}`;
+}
+function parseCron(expr) {
+  const p = (expr||'').trim().split(/\s+/);
+  if (p.length !== 5) return {};
+  const [mn, hr, , , dow] = p;
+  const time = (Number(hr).toString().padStart(2,'0')) + ':' + (Number(mn).toString().padStart(2,'0'));
+  const days_mode = dow === '*' ? 'every' : dow === '1-5' ? 'weekdays' : (dow === '0,6'||dow==='6,0') ? 'weekends' : 'custom';
+  const custom_days = days_mode === 'custom' ? dow.split(',').map(Number).filter(n=>n>=0&&n<=6) : [];
+  return { times: [time], days_mode, custom_days, schedule: expr };
+}
+function cronToEnglishClient(expr) {
+  const p = (expr||'').trim().split(/\s+/);
+  if (p.length !== 5) return expr;
+  const [mn,hr,,,dow] = p;
+  const time = (Number(hr) % 12 || 12) + ':' + String(Number(mn)).padStart(2,'0') + ' ' + (Number(hr) < 12 ? 'AM' : 'PM');
+  if (dow === '*') return 'Every day at ' + time;
+  if (dow === '1-5') return 'Weekdays at ' + time;
+  if (dow === '0,6' || dow === '6,0') return 'Weekends at ' + time;
+  const names = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  if (/^\d$/.test(dow)) return names[Number(dow)] + 's at ' + time;
+  if (/^\d(,\d)+$/.test(dow)) return dow.split(',').map(d=>names[Number(d)]).join(', ') + ' at ' + time;
+  return expr;
+}
+async function schedSave() {
+  const d = _schedDraft;
+  d.schedule = buildCronFromDraft();
+  d.name = $('#sd-name').value.trim();
+  d.prompt = $('#sd-prompt').value.trim();
+  d.agent = $('#sd-agent').value;
+  if (!d.name || !d.prompt) return toast('name + prompt required', 'err');
+  try {
+    if (d.id) {
+      await api('/api/scheduled/' + d.id, {
+        method: 'PATCH', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: d.name, schedule: d.schedule, agent: d.agent, prompt: d.prompt }),
+      });
+    } else {
+      await api('/api/scheduled', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: d.name, schedule: d.schedule, agent: d.agent, prompt: d.prompt }),
+      });
+    }
+    toast(d.id ? 'updated' : 'created');
+    closeModal();
+    refreshSchedDb();
+  } catch (e) { toast(e.message, 'err'); }
+}
+async function schedToggle(id) {
+  await api(`/api/scheduled/${id}/toggle`, { method: 'POST' });
+  refreshSchedDb();
+}
+async function schedRunNow(id) {
+  try {
+    const r = await api(`/api/scheduled/${id}/run-now`, { method: 'POST' });
+    toast('queued task #' + r.task_id);
+    refreshSchedDb();
+  } catch (e) { toast(e.message, 'err'); }
+}
+async function schedDelete(id) {
+  if (!confirm('Delete this scheduled task?')) return;
+  await api('/api/scheduled/' + id, { method: 'DELETE' });
+  refreshSchedDb();
+}
+
+// ============================================================================
+// PAGE: Agents (V3 transcript ch.10–11)
+// ============================================================================
+async function renderAgents() {
+  $('#main').innerHTML = `
+    <div class="page-header">
+      <h1>Agents</h1>
+      <div class="header-actions">
+        <span class="muted" id="ag-count">…</span>
+        <select class="btn" style="padding:6px 14px">
+          <option>default</option>
+        </select>
+        <button class="btn ghost"><span>💡</span> 0 suggestions</button>
+        <button class="btn primary" onclick="newAgentInfo()">+ New Agent</button>
+      </div>
+    </div>
+    <div class="page-body">
+      <div class="agents-grid" id="ag-grid">Loading…</div>
+    </div>
+  `;
+  await refreshAgents();
+}
+async function refreshAgents() {
+  try {
+    const { agents } = await api('/api/agents');
+    $('#ag-count').textContent = `${agents.filter(a=>a.status==='running').length} live · ${agents.length} total`;
+    $('#ag-grid').innerHTML = agents.map(a => `
+      <div class="agent-card">
+        <div class="head">
+          <div class="ava ava-${a.name}">${a.name[0].toUpperCase()}</div>
+          <div class="grow">
+            <div class="name"><span class="dot ${a.status==='running'?'ok':'err'}"></span>${a.name[0].toUpperCase()+a.name.slice(1)} <small>${esc(a.name)}</small></div>
+          </div>
+        </div>
+        <div class="desc">${esc(AGENT_DESCS[a.name] || a.role || '')}</div>
+        <div class="row">
+          <select class="model" onchange="agentSetModel('${esc(a.name)}', this.value)">
+            ${['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5'].map(m =>
+              `<option value="${m}" ${a.model===m?'selected':''}>${m.replace('claude-','').replace('-4-6',' 4.6').replace('-4-5',' 4.5')}</option>`
+            ).join('')}
+          </select>
+          <span class="pill ${a.status==='running'?'live':'stopped'}">${a.status}</span>
+        </div>
+        <div class="turns">Today turns</div>
+        <div class="turns-n">${a.today_turns ?? 0}</div>
+        <div class="actions">
+          <button class="btn sm ghost grow" onclick="agentRuntime('${esc(a.name)}','${a.status==='running'?'stop':'start'}')">
+            ⏻ ${a.status==='running'?'Stop':'Start'}
+          </button>
+          <button class="icon-btn" onclick="agentInspect('${esc(a.name)}')" title="Inspect">📄</button>
+          <button class="icon-btn" onclick="agentRuntime('${esc(a.name)}','restart')" title="Restart">⟳</button>
+          <button class="icon-btn" title="Delete (disabled — edit agent.yaml manually)" disabled>🗑</button>
+        </div>
+      </div>
+    `).join('');
+  } catch (e) {
+    $('#ag-grid').innerHTML = `<div class="empty">Error: ${esc(e.message)}</div>`;
+  }
+}
+async function agentSetModel(name, model) {
+  try {
+    await api(`/api/agents/${name}/model`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model }),
+    });
+    toast(`${name} → ${model}`);
+  } catch (e) { toast(e.message, 'err'); }
+}
+async function agentRuntime(name, action) {
+  try {
+    await api(`/api/agents/${name}/runtime`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action }),
+    });
+    toast(`${name} ${action}`);
+    refreshAgents();
+  } catch (e) { toast(e.message, 'err'); }
+}
+async function agentInspect(name) {
+  try {
+    const cfg = await api(`/api/agents/${name}/config`);
+    openModal(`
+      <div class="modal-head">
+        <h2><span class="dot ok"></span> ${esc(name)} <small class="muted" style="font-size:12px;font-weight:400">${esc(name)}</small></h2>
+        <button class="x" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="field"><label>agent.yaml</label><textarea readonly rows="12" style="font-family:ui-monospace,monospace;font-size:12px">${esc(cfg.yaml)}</textarea></div>
+        <div class="field"><label>CLAUDE.md (preview)</label><textarea readonly rows="10" style="font-family:ui-monospace,monospace;font-size:12px">${esc(cfg.claude_md.slice(0, 1500))}${cfg.claude_md.length > 1500 ? '\n…' : ''}</textarea></div>
+      </div>
+      <div class="modal-foot">
+        <span class="muted" style="font-size:11px;margin-right:auto">Edit these files in <code>agents/${esc(name)}/</code></span>
+        <button class="btn ghost" onclick="closeModal()">Close</button>
+      </div>
+    `);
+  } catch (e) { toast(e.message, 'err'); }
+}
+function newAgentInfo() {
+  openModal(`
+    <div class="modal-head"><h2>Add a new agent</h2><button class="x" onclick="closeModal()">✕</button></div>
+    <div class="modal-body">
+      <p>Live in 90 seconds (V3 page 14):</p>
+      <ol style="line-height:1.7;color:var(--muted)">
+        <li>Copy <code>agents/_template/</code> to <code>agents/&lt;name&gt;/</code></li>
+        <li>Edit <code>agent.yaml</code> — set <code>name</code>, <code>model</code>, <code>tools</code></li>
+        <li>Edit <code>CLAUDE.md</code> — write a one-paragraph persona</li>
+        <li>Get a Telegram bot token from <a href="https://t.me/BotFather" target="_blank">@BotFather</a></li>
+        <li>Add the token to <code>.env</code> and refresh this page</li>
+      </ol>
+    </div>
+    <div class="modal-foot">
+      <button class="btn primary" onclick="closeModal()">Got it</button>
+    </div>
+  `);
+}
+
+// ============================================================================
+// PAGE: Chat (V3 transcript ch.13)
+// ============================================================================
+let _chatFilter = 'all';
+async function renderChat() {
+  $('#main').innerHTML = `
+    <div class="page-header">
+      <h1>Chat</h1>
+      <div class="header-actions">
+        <span class="muted" id="chat-stat">…</span>
+      </div>
+    </div>
+    <div class="chat-filter" id="chat-filter">
+      ${['all', ...AGENTS].map(a => `
+        <span class="chip ${_chatFilter===a?'on':''}" onclick="setChatFilter('${a}')">
+          ${a==='all' ? 'All' : `<span class="dot" style="background:${a==='main'?'#4aa3ff':a==='meta'?'#8b7cff':a==='comms'?'#ff7ac0':a==='content'?'#fb923c':a==='ops'?'#3ddc97':'#b388ff'}"></span> ${a[0].toUpperCase()+a.slice(1)}
+        `}
+        </span>
+      `).join('')}
+    </div>
+    <div class="page-body">
+      <div class="chat-feed" id="chat-feed">Loading…</div>
+    </div>
+  `;
+  await refreshChat();
+}
+function setChatFilter(a) { _chatFilter = a; renderChat(); }
+async function refreshChat() {
+  try {
+    let rows;
+    if (_chatFilter === 'all') {
+      const { rows: r } = await api('/api/agents/hive?limit=50');
+      rows = r;
+    } else {
+      const { rows: r } = await api(`/api/agents/${_chatFilter}/chat?limit=50`);
+      rows = r.map(x => ({ ...x, agent: _chatFilter }));
+    }
+    const today = rows.filter(r => r.created_at >= Math.floor(Date.now()/1000) - 86400).length;
+    $('#chat-stat').textContent = `TURNS TODAY ${today}`;
+    if (!rows.length) {
+      $('#chat-feed').innerHTML = '<div class="empty">No chat history yet.</div>';
+      return;
+    }
+    $('#chat-feed').innerHTML = rows.map(r => `
+      <div class="chat-msg">
+        <div class="chat-head">
+          <span class="agent-tag-pill" data-agent="${esc(r.agent)}"><span class="dot"></span>${esc(r.agent)}</span>
+          <span class="muted" style="font-size:11px">${ago(r.created_at)}</span>
+        </div>
+        <div class="chat-prompt">${esc(r.prompt.slice(0,200))}${r.prompt.length > 200 ? '…' : ''}</div>
+        <div class="chat-reply">${esc(r.reply.slice(0, 1200))}${r.reply.length > 1200 ? '…' : ''}</div>
+      </div>
+    `).join('');
+  } catch (e) {
+    $('#chat-feed').innerHTML = `<div class="empty">Error: ${esc(e.message)}</div>`;
+  }
+}
+
+// ============================================================================
+// PAGE: Memories (existing landscape, recomposed)
+// ============================================================================
+async function renderMemories() {
+  $('#main').innerHTML = `
+    <div class="page-header">
+      <h1>Memories</h1>
+      <div class="header-actions" id="mem-count"></div>
+    </div>
+    <div class="page-body">
+      <div class="row" style="margin-bottom:14px">
+        <input id="mem-q" placeholder="Search memories…" class="grow" onkeydown="if(event.key==='Enter')memSearch()" />
+        <button class="btn" onclick="memSearch()">Search</button>
+      </div>
+      <div id="mem-results"></div>
+      <div class="mem-grid mt-12">
+        <div class="panel">
+          <h3>Importance distribution</h3>
+          <div id="mem-dist">Loading…</div>
+        </div>
+        <div class="panel">
+          <h3 class="row"><span class="grow">Pinned memories</span><button class="btn sm" onclick="pinAddModal()">+ Add</button></h3>
+          <div id="mem-pinned">Loading…</div>
+        </div>
+      </div>
+      <div style="margin-top:18px">
+        <h3 class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;margin:0 0 8px">Insights</h3>
+        <div id="mem-insights">Loading…</div>
+      </div>
+    </div>
+  `;
+  refreshMemDist();
+  refreshMemPinned();
+  refreshMemInsights();
+}
+async function memSearch() {
+  const q = $('#mem-q').value.trim();
+  if (!q) { $('#mem-results').innerHTML = ''; return; }
+  try {
+    const { rows } = await api('/api/memory/search?q=' + encodeURIComponent(q));
+    if (!rows.length) { $('#mem-results').innerHTML = '<div class="empty">No matches.</div>'; return; }
+    $('#mem-results').innerHTML = `<div class="panel">${rows.map(m => `
+      <div style="padding:8px 0;border-top:1px solid var(--border)">
+        <div class="row" style="margin-bottom:3px">
+          <span class="pill">${esc(m.kind)}</span>
+          <span class="muted" style="font-size:11px">imp ${(+m.importance).toFixed(2)} · ${esc(m.agent || 'global')}</span>
+        </div>
+        <div>${esc(m.content)}</div>
+      </div>`).join('')}</div>`;
+  } catch (e) { toast(e.message, 'err'); }
+}
+async function refreshMemDist() {
+  try {
+    const { buckets } = await api('/api/memory/distribution');
+    const max = Math.max(1, ...buckets.map(b => b.n));
+    $('#mem-dist').innerHTML = buckets.length ? buckets.map(b => `
+      <div class="dist-row">
+        <span class="dist-label">${esc(b.bucket)}</span>
+        <div class="dist-bar"><div class="dist-bar-fill" style="width:${Math.round(b.n/max*100)}%"></div></div>
+        <span class="dist-count">${b.n}</span>
+      </div>`).join('') : '<div class="empty">No memories yet.</div>';
+  } catch (e) {
+    $('#mem-dist').innerHTML = `<div class="empty">${esc(e.message)}</div>`;
+  }
+}
+async function refreshMemPinned() {
+  try {
+    const { rows } = await api('/api/memory/pinned');
+    $('#mem-pinned').innerHTML = rows.length ? rows.map(p => `
+      <div class="pin-item">
+        <span class="pin-scope">${esc(p.scope)}</span>
+        <span class="pin-content">${esc(p.content)}</span>
+        <button class="pin-del" onclick="pinDelete(${p.id})">✕</button>
+      </div>
+    `).join('') : '<div class="empty">No pinned memories.</div>';
+  } catch (e) {
+    $('#mem-pinned').innerHTML = `<div class="empty">${esc(e.message)}</div>`;
+  }
+}
+async function refreshMemInsights() {
+  try {
+    const { rows } = await api('/api/memory/insights');
+    if (!rows.length) {
+      $('#mem-insights').innerHTML = '<div class="empty muted">No insights yet — run <code>python -m memory.insights</code> to generate them.</div>';
+      return;
+    }
+    $('#mem-insights').innerHTML = rows.map(i => `
+      <div class="insight-card">
+        <div class="insight-conf">confidence ${(+i.confidence).toFixed(2)} · ${esc(i.agent || 'global')}</div>
+        <div>${esc(i.observation)}</div>
+      </div>
+    `).join('');
+  } catch (e) {
+    $('#mem-insights').innerHTML = `<div class="empty">${esc(e.message)}</div>`;
+  }
+}
+function pinAddModal() {
+  openModal(`
+    <div class="modal-head"><h2>Pin a memory</h2><button class="x" onclick="closeModal()">✕</button></div>
+    <div class="modal-body">
+      <div class="field"><label>Content</label><input id="pin-c" /></div>
+      <div class="field"><label>Scope</label>
+        <select id="pin-s">
+          <option value="global">global</option>
+          ${AGENTS.map(a => `<option value="${a}">${a}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn primary" onclick="pinSave()">Pin</button>
+    </div>
+  `);
+}
+async function pinSave() {
+  const content = $('#pin-c').value.trim();
+  const scope = $('#pin-s').value;
+  if (!content) return toast('content required', 'err');
+  await api('/api/memory/pinned', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content, scope }) });
+  closeModal(); refreshMemPinned();
+}
+async function pinDelete(id) {
+  await api('/api/memory/pinned/' + id, { method: 'DELETE' });
+  refreshMemPinned();
+}
+
+// ============================================================================
+// PAGE: Hive Mind (list / 2D / 3D-placeholder — V3 PDF p9)
+// ============================================================================
+let _hiveTab = 'list';
+let _hivePeriod = '7d';
+let _hiveAgentFilter = 'all';
+let _cy = null;
+async function renderHive() {
+  $('#main').innerHTML = `
+    <div class="page-header">
+      <h1>Hive Mind</h1>
+      <div class="header-actions">
+        <span class="muted" id="hive-counts">…</span>
+        <div class="seg">
+          <button class="${_hiveTab==='list'?'on':''}" onclick="hiveTab('list')">≡ List</button>
+          <button class="${_hiveTab==='2d'?'on':''}" onclick="hiveTab('2d')">⌘ 2D</button>
+          <button class="${_hiveTab==='3d'?'on':''}" onclick="hiveTab('3d')">◉ 3D</button>
+        </div>
+      </div>
+    </div>
+    <div class="hive-tabs">
+      ${['all', ...AGENTS].map(a => `
+        <span class="hive-tab ${_hiveAgentFilter===a?'active':''}" onclick="hiveFilter('${a}')">${a==='all'?'All':a}</span>
+      `).join('')}
+      <span class="grow"></span>
+      <select onchange="hivePeriod(this.value)" style="margin:6px 0;align-self:center">
+        <option value="24h" ${_hivePeriod==='24h'?'selected':''}>Last 24h</option>
+        <option value="7d" ${_hivePeriod==='7d'?'selected':''}>Last 7d</option>
+        <option value="30d" ${_hivePeriod==='30d'?'selected':''}>Last 30d</option>
+      </select>
+    </div>
+    <div class="page-body">
+      <div id="hive-content">Loading…</div>
+    </div>
+  `;
+  await refreshHive();
+}
+function hiveTab(t) { _hiveTab = t; renderHive(); }
+function hiveFilter(a) { _hiveAgentFilter = a; refreshHive(); }
+function hivePeriod(p) { _hivePeriod = p; refreshHive(); }
+async function refreshHive() {
+  try {
+    const data = await api(`/api/hive?period=${_hivePeriod}`);
+    let list = data.list;
+    if (_hiveAgentFilter !== 'all') list = list.filter(r => r.agent === _hiveAgentFilter);
+    $('#hive-counts').textContent = `${list.length} entries · ${data.counts.agents} agents`;
+    if (_hiveTab === 'list') renderHiveList(list);
+    else if (_hiveTab === '2d') renderHive2D(data);
+    else renderHive3D();
+  } catch (e) {
+    $('#hive-content').innerHTML = `<div class="empty">${esc(e.message)}</div>`;
+  }
+}
+function renderHiveList(rows) {
+  $('#hive-content').innerHTML = `
+    <div class="hive-list">
+      <div class="hive-list-row">
+        <div>WHEN</div><div>AGENT</div><div>ACTION</div><div>SUMMARY</div>
+      </div>
+      ${rows.map(r => `
+        <div class="hive-list-row">
+          <div class="col-when">${ago(r.created_at)}</div>
+          <div><span class="agent-tag-pill" data-agent="${esc(r.agent)}"><span class="dot"></span>${esc(r.agent)}</span></div>
+          <div>${esc(deriveAction(r))}</div>
+          <div class="col-summary">${esc(r.reply.slice(0, 200))}</div>
+        </div>
+      `).join('') || '<div class="empty">No entries.</div>'}
+    </div>
+  `;
+}
+function deriveAction(r) {
+  const p = (r.prompt || '').toLowerCase();
+  if (p.startsWith('/standup')) return 'standup';
+  if (p.startsWith('/discuss')) return 'discuss';
+  if (p.startsWith('[ad hoc]')) return 'ad_hoc_run';
+  if (p.includes('warroom') || p.includes('voice')) return 'warroom_reply';
+  return 'session_end';
+}
+function renderHive2D(data) {
+  $('#hive-content').innerHTML = `<div id="hive-graph"></div>`;
+  if (typeof cytoscape === 'undefined') {
+    $('#hive-graph').innerHTML = '<div class="empty">Cytoscape failed to load (CDN blocked?). 2D graph unavailable; switch to List view.</div>';
+    return;
+  }
+  _cy = cytoscape({
+    container: $('#hive-graph'),
+    elements: [...data.nodes, ...data.edges],
+    style: [
+      { selector: 'node[type="agent"]', style: {
+        'background-color': '#8b7cff', 'label': 'data(label)',
+        'color': '#fff', 'font-size': '12px', 'font-weight': 'bold',
+        'width': 'mapData(size, 0, 50, 30, 70)', 'height': 'mapData(size, 0, 50, 30, 70)',
+        'text-valign': 'center', 'text-halign': 'center',
+      }},
+      { selector: 'node[type="task"]', style: {
+        'background-color': '#3ddc97', 'label': 'data(label)',
+        'color': '#e6e9f0', 'font-size': '9px', 'width': 14, 'height': 14,
+        'text-valign': 'bottom', 'text-margin-y': 3, 'text-max-width': 120, 'text-wrap': 'ellipsis',
+      }},
+      { selector: 'edge[type="assigned"]', style: { 'width': 1, 'line-color': '#262a3c', 'curve-style': 'bezier' }},
+      { selector: 'edge[type="next"]',     style: { 'width': 1, 'line-color': '#1d2030', 'line-style': 'dashed', 'curve-style': 'bezier' }},
+    ],
+    layout: { name: 'cose', animate: false, idealEdgeLength: 90 },
+    wheelSensitivity: 0.2,
+  });
+}
+function renderHive3D() {
+  $('#hive-content').innerHTML = `
+    <div class="brain-3d-placeholder">
+      <div class="icon">🧠</div>
+      <div style="font-size:15px;color:var(--text);margin-bottom:6px">3D brain — coming soon</div>
+      <div style="max-width:520px">A volumetric visualization (three.js + custom brain mesh) where each region pulses as agents fire. Skipped in this build because the 2D graph already covers daily inspection; the 3D layer would add ~2MB of three.js with marginal ops value.</div>
+      <div class="mt-12"><button class="btn" onclick="hiveTab('2d')">Show 2D graph instead</button></div>
+    </div>
+  `;
+}
+
+// ============================================================================
+// PAGE: Usage (sidebar)
+// ============================================================================
+async function renderUsage() {
+  $('#main').innerHTML = `
+    <div class="page-header">
+      <h1>Usage</h1>
+      <div class="header-actions">
+        <select id="us-days" onchange="refreshUsage()">
+          <option value="7">Last 7d</option>
+          <option value="30" selected>Last 30d</option>
+          <option value="90">Last 90d</option>
+        </select>
+      </div>
+    </div>
+    <div class="page-body">
+      <div class="mem-grid">
+        <div class="panel"><h3>Total</h3><div id="us-total">…</div></div>
+        <div class="panel"><h3>Per agent</h3><div id="us-agent">…</div></div>
+      </div>
+    </div>
+  `;
+  await refreshUsage();
+}
+async function refreshUsage() {
+  const days = $('#us-days')?.value || 30;
+  try {
+    const data = await api(`/api/usage?days=${days}`);
+    const t = data.total;
+    $('#us-total').innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px">
+        <div><div class="muted" style="font-size:11px;text-transform:uppercase">Turns</div><div style="font-size:24px;font-weight:600">${t.turns}</div></div>
+        <div><div class="muted" style="font-size:11px;text-transform:uppercase">Cost</div><div style="font-size:24px;font-weight:600">$${(t.cost||0).toFixed(2)}</div></div>
+        <div><div class="muted" style="font-size:11px;text-transform:uppercase">Input tok</div><div>${(t.in_tok||0).toLocaleString()}</div></div>
+        <div><div class="muted" style="font-size:11px;text-transform:uppercase">Output tok</div><div>${(t.out_tok||0).toLocaleString()}</div></div>
+      </div>
+    `;
+    if (!data.by_agent.length) {
+      $('#us-agent').innerHTML = '<div class="empty muted">No usage rows yet — bridge writes them per turn.</div>';
+      return;
+    }
+    $('#us-agent').innerHTML = data.by_agent.map(r => `
+      <div class="dist-row">
+        <span class="dist-label">${esc(r.agent)}</span>
+        <div class="dist-bar"><div class="dist-bar-fill" style="width:${Math.min(100, (r.cost/Math.max(...data.by_agent.map(x=>x.cost),0.01))*100).toFixed(0)}%"></div></div>
+        <span class="dist-count">$${(r.cost||0).toFixed(2)}</span>
+      </div>
+    `).join('');
+  } catch (e) {
+    $('#us-total').innerHTML = `<div class="empty">${esc(e.message)}</div>`;
+  }
+}
+
+// ============================================================================
+// PAGE: Audit (V3 PDF p10)
+// ============================================================================
+async function renderAudit() {
+  $('#main').innerHTML = `
+    <div class="page-header">
+      <h1>Audit</h1>
+      <div class="header-actions">
+        <span class="muted" id="ad-count">…</span>
+      </div>
+    </div>
+    <div class="page-body">
+      <div class="hive-list" id="ad-list">Loading…</div>
+    </div>
+  `;
+  await refreshAudit();
+}
+async function refreshAudit() {
+  try {
+    const data = await api('/api/audit?limit=200');
+    const rows = data.rows || [];
+    $('#ad-count').textContent = rows.length ? `${rows.length} events` : (data.file_tail ? `${data.file_tail.length} log lines (file)` : 'no audit yet');
+    if (rows.length) {
+      $('#ad-list').innerHTML = `
+        <div class="audit-row"><div>WHEN</div><div>AGENT</div><div>ACTION</div><div>CORRELATION</div></div>
+        ${rows.map(r => `
+          <div class="audit-row">
+            <div class="muted">${ago(r.ts)}</div>
+            <div><span class="agent-tag-pill" data-agent="${esc(r.agent || 'system')}"><span class="dot"></span>${esc(r.agent || 'system')}</span></div>
+            <div>${esc(r.action)}</div>
+            <div class="corr">${esc(r.correlation_id || '')}</div>
+          </div>
+        `).join('')}
+      `;
+    } else if (data.file_tail) {
+      $('#ad-list').innerHTML = `<div class="panel"><pre style="margin:0;font-size:11px;color:var(--muted);white-space:pre-wrap">${data.file_tail.map(esc).join('\n')}</pre></div>`;
+    } else {
+      $('#ad-list').innerHTML = '<div class="empty">No audit events yet.</div>';
+    }
+  } catch (e) {
+    $('#ad-list').innerHTML = `<div class="empty">${esc(e.message)}</div>`;
+  }
+}
+
+// ============================================================================
+// PAGE: War Room (launcher)
+// ============================================================================
+async function renderWarRoom() {
+  $('#main').innerHTML = `
+    <div class="page-header">
+      <h1>War Room</h1>
+      <div class="header-actions">
+        <span class="muted" id="wr-stat">probing…</span>
+      </div>
+    </div>
+    <div class="page-body">
+      <div class="panel" style="text-align:center;padding:48px 24px">
+        <div style="font-size:36px;margin-bottom:14px">🎙</div>
+        <h2 style="margin:0 0 8px">Voice + Text meetings with all your agents</h2>
+        <p class="muted" style="max-width:520px;margin:0 auto 18px">Pipecat + Gemini Live on :7860. <code>/standup</code> pulls each agent's last 24h from hive_mind; Main consolidates. <code>/discuss &lt;topic&gt;</code> for a council vote.</p>
+        <div class="row" style="justify-content:center">
+          <button class="btn primary" onclick="openWarRoom('voice')">🎤 Voice mode</button>
+          <button class="btn" onclick="openWarRoom('text')">▢ Text meeting</button>
+        </div>
+      </div>
+    </div>
+  `;
+  probeWarRoom();
+}
+function openWarRoom(mode) { window.open(`http://localhost:7860?mode=${mode}`, '_blank'); }
+async function probeWarRoom() {
+  try {
+    await fetch('http://localhost:7860/healthz', { mode: 'no-cors', cache: 'no-store' });
+    $('#wr-stat').innerHTML = '<span class="dot ok"></span>online';
+    $('#wr-status-dot').innerHTML = '<span class="dot ok"></span>';
+  } catch {
+    $('#wr-stat').innerHTML = '<span class="dot err"></span>offline (start with <code>npm run warroom</code>)';
+    $('#wr-status-dot').innerHTML = '';
+  }
+}
+
+// ============================================================================
+// PAGE: Settings
+// ============================================================================
+async function renderSettings() {
+  $('#main').innerHTML = `
+    <div class="page-header"><h1>Settings</h1></div>
+    <div class="page-body">
+      <div class="panel"><h3>Kill switches (V3 p4 + p5)</h3>
+        <div id="kill-switches">Loading…</div>
+      </div>
+      <div class="panel mt-12"><h3>Build info</h3>
+        <div class="muted" style="font-family:ui-monospace,monospace;font-size:11px">
+          dashboard build · ClaudeClaw V3<br>
+          See <code>docs/IMPLEMENTATION_STATUS.md</code> for full feature × build state.
+        </div>
+      </div>
+    </div>
+  `;
+  refreshKillSwitches();
+}
+async function refreshKillSwitches() {
+  try {
+    const data = await api('/api/schedule');
+    $('#kill-switches').innerHTML = `
+      <div class="row" style="margin-bottom:8px">
+        <label class="row" style="cursor:pointer">
+          <input type="checkbox" ${data.enabled ? 'checked' : ''} onchange="toggleSchedSwitch(this.checked)" />
+          <span>Scheduler enabled</span>
+        </label>
+        <span class="muted" style="font-size:11px;margin-left:auto">SCHEDULER_ENABLED env var</span>
+      </div>
+      <div class="muted" style="font-size:12px">Auto-assign and kill phrase are env-only (require process restart). See <code>.env</code>.</div>
+    `;
+  } catch (e) {
+    $('#kill-switches').innerHTML = `<div class="empty">${esc(e.message)}</div>`;
+  }
+}
+async function toggleSchedSwitch(enabled) {
+  await api('/api/schedule/toggle', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ enabled }) });
+  toast(enabled ? 'scheduler enabled' : 'scheduler halted');
+  refreshKillSwitches();
+}
+
+// ============================================================================
+// Boot
+// ============================================================================
+navigate();
+probeWarRoom();
+setInterval(probeWarRoom, 12000);
+</script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+{
+  "name": "claudeclaw",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/bridge",
+    "apps/dashboard"
+  ],
+  "scripts": {
+    "bridge": "npm run dev -w @claudeclaw/bridge",
+    "dashboard": "npm run dev -w @claudeclaw/dashboard",
+    "scheduler": "tsx scheduler/runner.ts",
+    "db:init": "sqlite3 store/claudeclaw.db < memory/schema.sql",
+    "warroom": "cd apps/warroom && .venv/bin/python server.py"
+  },
+  "dependencies": {
+    "node-cron": "^3.0.3",
+    "yaml": "^2.5.0",
+    "tsx": "^4.7.0"
+  },
+  "devDependencies": {
+    "@types/node-cron": "^3.0.11"
+  }
+}
