@@ -124,7 +124,67 @@ Cross-reference of every feature mentioned in the V3 PDF visual guide and the 24
 - **Pinned-agent UI in war room** — backend supports `{type:"pin", agent:...}`; ws client doesn't expose a pin selector
 - **Auto-assign all** in dashboard — wired (button calls existing `/api/tasks/:id/auto-assign` per row); could be optimized to a single batched call
 
-## Just landed in this commit (UI rebuild + 6th agent)
+## Just landed (Phase A + selected B/C — the 9-item ROI sequence)
+
+**A1 — Usage writer in bridge** ✅
+- `apps/bridge/src/index.ts` writes `(agent, ts, input_tok, output_tok, cost_usd)` to `usage` table after each SDK turn
+- Dashboard `/api/usage` and `#usage` page now reflect real data after first turn
+
+**A8 — `/insights` Telegram cmd** ✅
+- `apps/bridge/src/insights-cmd.ts` spawns `python -m memory.insights --period 7d` (or `30d`/`90d`)
+- Output trimmed to 3500 chars for Telegram limit
+- Listed in `/help`
+
+**A2 — `/dashboard` Telegram cmd** ✅
+- Already existed; enhanced with `DASHBOARD_PUBLIC_URL` env var for tunnel URL preference over localhost
+
+**A3 — Agent creation full flow** ✅
+- `POST /api/agents` copies `agents/_template/`, patches yaml + CLAUDE.md, appends to `voices.yaml`
+- Dashboard "+ New Agent" button shows real form (name, role, description, persona, model, voice)
+- Returns BotFather link + next-steps modal
+
+**C2 — SQLite backup automation** ✅
+- `bin/backup.sh` uses `sqlite3 .backup` (WAL-safe), retention 14 daily / 8 weekly, optional `rclone` upload
+- `infra/launchd/com.claudeclaw.backup.plist` runs nightly 03:15
+
+**C3 — Audit log rotation** ✅
+- `apps/bridge/src/log-rotation.ts` rotates `security/audit.log` when > 10MB, gzips, keeps 6
+- Bridge runs the check at boot + every 6h
+
+**A4 — Drag-and-drop kanban** ✅
+- Sortable.js (CDN) on `.kanban-cards` containers; drop fires `/api/tasks/:id/assign`
+- CSS includes ghost class + grabbing cursor
+
+**A5 — War Room text-mode standalone** ✅
+- `apps/warroom/public/text-mode.html` (313 LOC): TEAM sidebar with S/M/L sizes (localStorage-persisted), pin-agent click, reflecting indicators on `/standup`+`/discuss`
+- Pulls agent list + last activity from dashboard `/api/agents` and `/api/agents/:n/recent`
+- Honest stub for actual SDK invocation: routes through dashboard recent-task display until `apps/warroom/server.py` exposes `/api/text` (see Top 5 Remaining Gaps)
+
+**C4 — Mobile-responsive dashboard** ✅
+- `@media (max-width: 768px)` rules: sidebar collapses to bottom-tab nav, kanban stacks, modals become bottom sheets, hive list drops the ACTION column
+- 16px input font-size to prevent iOS auto-zoom
+- Tighter `@media (max-width: 480px)` overrides for phones
+
+**B3 — Memory interview workflow** ✅
+- `memory/interview.py` (278 LOC): 15 questions covering decay rate, drop threshold, pin policy, inject limits, embedding model
+- Writes `memory/config.yaml`; `load_config()` helper for extractor/consolidator/inject to read it
+- `--non-interactive` mode writes defaults (smoke-tested)
+
+**B1 — Daily.co meeting integration** ✅
+- `apps/dashboard/src/routes/meeting.ts`: `POST /api/meeting/create` calls Daily.co REST, returns 1h-TTL room URL; `GET /api/meeting/list` lists current rooms
+- `/meeting [agent]` Telegram cmd creates the room and returns URL
+- `apps/warroom/meeting.py` (174 LOC): standalone FastAPI service on `:7861` with `POST /join-meeting` that spawns a Pipecat session (Daily transport + Gemini Live) — guarded with `HAVE_PIPECAT` flag so module imports cleanly when deps not installed
+- Per-agent system prompts mirror war room WS server
+
+## Top 5 remaining gaps (post-this-commit)
+
+- War-room `/api/text` endpoint to make A5 fully functional (currently displays last-known reply)
+- 3D brain visualization (intentional skip; 2D is plenty)
+- Layout switcher (kanban/table)
+- Pinned-agent UI in WebSocket war room (text-mode has it; voice mode doesn't)
+- Agent delete from dashboard (create works; delete still requires manual `rm -rf`)
+
+## What this commit DID add (UI rebuild + 6th agent)
 
 - **6th `meta` agent** — `agents/meta/{CLAUDE.md, agent.yaml}`, voices.yaml entry, server.py prompt, ALL_AGENTS in standup.py, classifier in `assign.ts`
 - **Sidebar SPA dashboard** — full rewrite of `apps/dashboard/public/index.html` (1,483 LOC). Hash routing across 9 pages: Mission Control, Scheduled, Agents, Chat, Memories, Hive Mind, Usage, Audit, War Room, Settings

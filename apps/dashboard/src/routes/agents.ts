@@ -121,6 +121,86 @@ export default function agentsRoute(db: Database.Database) {
     return c.json({ agent: name, rows });
   });
 
+  // A3 — Create new agent from dashboard.
+  // Copies agents/_template/, patches yaml + CLAUDE.md, returns BotFather link.
+  app.post("/", async (c) => {
+    const body = (await c.req.json()) as {
+      name?: string;
+      role?: string;
+      description?: string;
+      model?: string;
+      voice?: string;
+      persona?: string;
+    };
+    const name = (body.name ?? "").trim().toLowerCase();
+    if (!/^[a-z][a-z0-9_]{1,15}$/.test(name)) {
+      return c.json({ error: "name must be lowercase snake_case, 2-16 chars, start with a letter" }, 400);
+    }
+    if (name.startsWith("_") || ["main","meta","comms","content","ops","research","_template"].includes(name) === false && existsSync(join(AGENTS_ROOT, name))) {
+      return c.json({ error: `agent "${name}" already exists or name reserved` }, 409);
+    }
+    const tplDir = join(AGENTS_ROOT, "_template");
+    const newDir = join(AGENTS_ROOT, name);
+    if (!existsSync(tplDir)) return c.json({ error: "agents/_template/ missing" }, 500);
+    if (existsSync(newDir)) return c.json({ error: "directory already exists" }, 409);
+
+    // Copy template files.
+    mkdirSync(newDir, { recursive: true });
+    const tplYaml = readFileSync(join(tplDir, "agent.yaml"), "utf8");
+    const tplMd = readFileSync(join(tplDir, "CLAUDE.md"), "utf8");
+
+    // Patch yaml.
+    const role = (body.role ?? "specialist").replace(/[^a-z0-9_]/gi, "_").toLowerCase();
+    const model = body.model ?? "claude-sonnet-4-6";
+    const voice = body.voice ?? "Charon";
+    if (!/^claude-(opus|sonnet|haiku)-\d+(-\d+)?$/.test(model)) {
+      return c.json({ error: "invalid model" }, 400);
+    }
+    let yamlOut = tplYaml
+      .replace(/^name:.*$/m, `name: ${name}`)
+      .replace(/^role:.*$/m, `role: ${role}`)
+      .replace(/^model:.*$/m, `model: ${model}`)
+      .replace(/^voice:.*$/m, `voice: ${voice}`)
+      .replace(/<agent_name>/g, name)
+      .replace(/<AgentName>/g, name[0].toUpperCase() + name.slice(1));
+    writeFileSync(join(newDir, "agent.yaml"), yamlOut);
+
+    // Patch CLAUDE.md.
+    const display = name[0].toUpperCase() + name.slice(1);
+    const persona = body.persona ?? body.description ?? "Custom agent.";
+    const tagline = body.description ?? "Specialist agent";
+    let mdOut = tplMd
+      .replace(/<Agent Name>/g, display)
+      .replace(/<One-line tagline>/g, tagline)
+      .replace(/<role>/g, role.replace(/_/g, " "))
+      .replace(/<One sentence — what is this agent's job, in plain language\?>/g, persona);
+    writeFileSync(join(newDir, "CLAUDE.md"), mdOut);
+
+    // Append voice entry to voices.yaml (best effort; non-fatal if missing).
+    const voicesPath = resolve(process.cwd(), "../../apps/warroom/voices.yaml");
+    if (existsSync(voicesPath)) {
+      try {
+        const v = readFileSync(voicesPath, "utf8");
+        if (!v.includes(`  ${name}:`)) {
+          const append = `  ${name}:\n    voice: ${voice}\n    style: configured at create time\n`;
+          writeFileSync(voicesPath, v.trimEnd() + "\n" + append);
+        }
+      } catch { /* non-fatal */ }
+    }
+
+    return c.json({
+      ok: true,
+      name,
+      directory: `agents/${name}/`,
+      next_steps: [
+        "Get a Telegram bot token from https://t.me/BotFather",
+        `Add it to .env (e.g. TELEGRAM_BOT_TOKEN_${name.toUpperCase()}=...)`,
+        "Restart the bridge service",
+      ],
+      botfather_url: "https://t.me/BotFather",
+    });
+  });
+
   app.get("/:name/recent", (c) => {
     const name = c.req.param("name");
     const rows = db

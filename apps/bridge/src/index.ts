@@ -16,6 +16,8 @@ import { embed } from "./embed.js";
 import { buildInjectBlock } from "../../../memory/inject.js";
 import { parseStandupCommand, runStandupCommand } from "./standup.js";
 import { runSuggestCommand } from "./suggest.js";
+import { rotateAuditIfLarge } from "./log-rotation.js";
+import { runInsightsCommand } from "./insights-cmd.js";
 
 // --- config ---
 const TOKEN = must("TELEGRAM_BOT_TOKEN");
@@ -127,8 +129,11 @@ async function handle(chatId: string, text: string) {
     }
     if (ev.type === "result") {
       costUsd = ev.total_cost_usd ?? 0;
-      tokens = (ev.usage?.input_tokens ?? 0) + (ev.usage?.output_tokens ?? 0);
+      const inTok = ev.usage?.input_tokens ?? 0;
+      const outTok = ev.usage?.output_tokens ?? 0;
+      tokens = inTok + outTok;
       writeHive(agent, stripped, reply);
+      writeUsage(agent, inTok, outTok, costUsd);   // A1
     }
   }
 
@@ -145,7 +150,11 @@ async function handle(chatId: string, text: string) {
 
 // --- slash commands ---
 const KILL_PHRASE = process.env.KILL_PHRASE ?? "seven kingdoms fall";
-const DASHBOARD_URL = process.env.DASHBOARD_URL ?? "http://localhost:3141";
+// Prefer the public tunnel URL when set (for /dashboard from phone).
+const DASHBOARD_URL =
+  process.env.DASHBOARD_PUBLIC_URL ??
+  process.env.DASHBOARD_URL ??
+  "http://localhost:3141";
 let killed = false;
 
 async function handleSlash(chatId: string, text: string): Promise<boolean> {
@@ -208,6 +217,45 @@ async function handleSlash(chatId: string, text: string): Promise<boolean> {
       }
       return true;
     }
+    case "/insights": {
+      // A8 — surface higher-order insights from memories table.
+      const period = (text.split(/\s+/)[1] ?? "7d").trim();
+      await bot.sendMessage(chatId, `⏳ Generating insights (${period})…`);
+      try {
+        const result = await runInsightsCommand(period);
+        await bot.sendMessage(chatId, result, { parse_mode: "Markdown" });
+      } catch (e) {
+        await bot.sendMessage(chatId, `⚠️ ${String(e).slice(0, 200)}`);
+      }
+      return true;
+    }
+    case "/meeting": {
+      // B1 — Daily.co meeting room creation.
+      const dashboardBase =
+        process.env.DASHBOARD_INTERNAL_URL ?? "http://localhost:3141";
+      const agent = (text.split(/\s+/)[1] ?? "main").trim().toLowerCase();
+      try {
+        const res = await fetch(`${dashboardBase}/api/meeting/create`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ agent }),
+        });
+        if (!res.ok) {
+          const t = await res.text();
+          await bot.sendMessage(chatId, `⚠️ ${res.status}: ${t.slice(0, 200)}`);
+          return true;
+        }
+        const json = (await res.json()) as { url: string; room_name: string; expires_at: number };
+        const expIso = new Date(json.expires_at * 1000).toISOString();
+        await bot.sendMessage(
+          chatId,
+          `🎙 Meeting ready (${agent})\n${json.url}\n\nExpires: ${expIso}`,
+        );
+      } catch (e) {
+        await bot.sendMessage(chatId, `⚠️ ${String(e).slice(0, 200)}`);
+      }
+      return true;
+    }
     case "/help": {
       const help = [
         "*ClaudeClaw Commands*",
@@ -216,6 +264,8 @@ async function handleSlash(chatId: string, text: string): Promise<boolean> {
         "/standup [@agent ...] — 24h agent standup",
         "/discuss <topic> — team discussion on a topic",
         "/suggest — scan for overloaded agents",
+        "/insights [7d|30d|90d] — higher-order insights from memories",
+        "/meeting [agent] — create a Daily.co video meeting (B1)",
         "/dashboard — get dashboard URL",
         "/kill — halt all agents",
         "/resume — re-enable agents",
@@ -252,6 +302,19 @@ function writeHive(agent: AgentName, prompt: string, reply: string) {
   ).run(agent, prompt.slice(0, 2000), reply.slice(0, 4000));
 }
 
+// A1 — write per-turn usage so dashboard /api/usage reflects real cost.
+function writeUsage(agent: AgentName, inTok: number, outTok: number, costUsd: number) {
+  try {
+    db.prepare(
+      `INSERT INTO usage (agent, ts, input_tok, output_tok, cost_usd)
+       VALUES (?, strftime('%s', 'now'), ?, ?, ?)`,
+    ).run(agent, inTok, outTok, costUsd);
+  } catch (e) {
+    // Schema may not have usage table on older installs — log and continue.
+    log("usage.write.error", { err: String(e).slice(0, 120) });
+  }
+}
+
 function must(k: string): string {
   const v = process.env[k];
   if (!v) throw new Error(`missing env: ${k}`);
@@ -263,3 +326,13 @@ function log(event: string, data: Record<string, unknown> = {}) {
   console.log(line);
   appendFile(AUDIT_LOG, line + "\n").catch(() => {});
 }
+
+// C3 — rotate audit.log when it grows past 10MB; runs every 6h.
+const AUDIT_ROTATE_INTERVAL_MS = 6 * 60 * 60 * 1000;
+setInterval(() => {
+  rotateAuditIfLarge(AUDIT_LOG, 10 * 1024 * 1024, 6).catch((e) =>
+    log("audit.rotate.error", { err: String(e) }),
+  );
+}, AUDIT_ROTATE_INTERVAL_MS);
+// Also run once at boot.
+rotateAuditIfLarge(AUDIT_LOG, 10 * 1024 * 1024, 6).catch(() => {});

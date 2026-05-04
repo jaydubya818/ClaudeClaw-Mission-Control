@@ -149,6 +149,9 @@
     border: 1px solid var(--border-2); padding: 10px;
     margin-bottom: 8px; cursor: grab;
   }
+  .kanban-card:active { cursor: grabbing; }
+  .kanban-card-ghost { opacity: 0.4; background: var(--accent); }
+  .kanban-cards { min-height: 40px; }
   .kanban-card .meta { color: var(--muted); font-size: 11px; margin-bottom: 4px; display: flex; gap: 8px; }
   .kanban-card .title { font-size: 13px; margin-bottom: 8px; }
   .kanban-card .row {
@@ -324,10 +327,114 @@
   .grow { flex: 1; }
   .gap-12 { gap: 12px; }
   .mt-12 { margin-top: 12px; }
+
+  /* ============================================================== */
+  /* C4 — Mobile-responsive (≤ 768px)                                 */
+  /* ============================================================== */
+  @media (max-width: 768px) {
+    /* App shell: stack vertically. Sidebar collapses to bottom-tab nav. */
+    .app {
+      grid-template-columns: 1fr;
+      grid-template-rows: 1fr 60px;
+    }
+    .sidebar {
+      order: 2;
+      flex-direction: row;
+      overflow-x: auto;
+      overflow-y: hidden;
+      border-right: 0;
+      border-top: 1px solid var(--border);
+      padding: 6px 4px;
+      gap: 2px;
+    }
+    .ws-switcher, .search-box, .nav-section .label { display: none; }
+    .nav-section { margin: 0; display: contents; }
+    .nav-link {
+      flex: 0 0 auto;
+      padding: 8px 12px;
+      flex-direction: column;
+      gap: 2px;
+      font-size: 10px;
+      border-left: 0;
+      border-bottom: 2px solid transparent;
+      white-space: nowrap;
+      text-align: center;
+    }
+    .nav-link.active {
+      border-left: 0;
+      border-bottom-color: var(--accent-2);
+    }
+    .nav-link .ico { font-size: 16px; }
+
+    .main { order: 1; }
+    .page-header {
+      padding: 12px 14px;
+      flex-wrap: wrap;
+    }
+    .page-header h1 { font-size: 15px; }
+    .page-header .header-actions {
+      width: 100%;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .page-body { padding: 12px 14px 80px; }
+
+    /* Mission Control: stack columns. */
+    .kanban {
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+    .kanban-toolbar { flex-wrap: wrap; }
+    .kanban-counts { width: 100%; order: -1; margin-bottom: 4px; }
+
+    /* Agents: single column. */
+    .agents-grid { grid-template-columns: 1fr; }
+
+    /* Modals: full-bleed bottom sheet. */
+    .modal {
+      width: 100vw; max-width: 100vw;
+      max-height: 92vh;
+      border-radius: 14px 14px 0 0;
+      align-self: end;
+    }
+
+    /* Memory landscape: stack. */
+    .mem-grid { grid-template-columns: 1fr; }
+
+    /* Hive list: hide ACTION column, condense WHEN. */
+    .hive-list-row {
+      grid-template-columns: 80px 90px 1fr;
+      gap: 8px;
+      padding: 10px 12px;
+    }
+    .hive-list-row > div:nth-child(3) { display: none; } /* drop ACTION on mobile */
+
+    /* Scheduled: stack rows. */
+    .sched-row {
+      grid-template-columns: 1fr;
+      gap: 6px;
+      padding: 12px;
+    }
+
+    /* Audit: drop correlation column. */
+    .audit-row { grid-template-columns: 80px 70px 1fr; gap: 8px; padding: 8px 12px; }
+    .audit-row > div:nth-child(4) { display: none; }
+
+    /* Tighter input padding. */
+    input, textarea, select { padding: 10px; font-size: 16px; } /* 16px stops iOS auto-zoom */
+  }
+
+  @media (max-width: 480px) {
+    .nav-link { padding: 6px 8px; font-size: 9px; }
+    .agent-card .actions .icon-btn { width: 32px; height: 32px; }
+    .btn { padding: 8px 14px; }
+    .btn.sm { padding: 6px 10px; }
+  }
 </style>
 </head>
 <body>
 <script src="https://unpkg.com/cytoscape@3.30.2/dist/cytoscape.min.js"></script>
+<script src="https://unpkg.com/sortablejs@1.15.2/Sortable.min.js"></script>
 
 <div class="app">
   <!-- ============== SIDEBAR ============== -->
@@ -487,12 +594,11 @@ async function refreshKanban() {
     }
     $('#km-counts').textContent =
       `${live} active · ${unassigned} unassigned · ${rows.length} total`;
-    $('#kanban').innerHTML = cols.map(col => {
+    const renderHtml = cols.map(col => {
       const isInbox = col === 'inbox';
       const tasks = byCol[col];
-      const agentInfo = agents.find(a => a.name === col);
       return `
-        <div class="kanban-col">
+        <div class="kanban-col" data-col="${col}">
           <div class="kanban-col-header">
             ${isInbox
               ? '<div class="ava ava-main" style="width:24px;height:24px;font-size:10px">📥</div>'
@@ -501,6 +607,7 @@ async function refreshKanban() {
             <div class="col-count">${tasks.length}</div>
             ${!isInbox ? `<div class="live-dot">●</div>` : ''}
           </div>
+          <div class="kanban-cards" data-col="${col}">
           ${tasks.length ? tasks.map(t => `
             <div class="kanban-card" data-id="${t.id}">
               <div class="meta">
@@ -519,10 +626,44 @@ async function refreshKanban() {
               ${t.status === 'queued' ? `<div class="row" style="margin-top:6px"><button class="btn sm" onclick="setTaskStatus(${t.id},'live')">Set live</button></div>` : ''}
               ${t.status === 'live' ? `<div class="row" style="margin-top:6px"><button class="btn sm" onclick="setTaskStatus(${t.id},'done')">Mark done</button></div>` : ''}
             </div>
-          `).join('') : '<div class="kanban-empty">No tasks</div>'}
+          `).join('') : '<div class="kanban-empty">Drop tasks here</div>'}
+          </div>
         </div>
       `;
     }).join('');
+    $('#kanban').innerHTML = renderHtml;
+    // A4 — wire Sortable on each column.
+    if (typeof Sortable !== 'undefined') {
+      $$('.kanban-cards').forEach(el => {
+        Sortable.create(el, {
+          group: 'tasks',
+          animation: 150,
+          ghostClass: 'kanban-card-ghost',
+          onAdd: async (evt) => {
+            const id = Number(evt.item.dataset.id);
+            const targetCol = evt.to.dataset.col;
+            const agent = targetCol === 'inbox' ? null : targetCol;
+            try {
+              if (agent) {
+                await api(`/api/tasks/${id}/assign`, {
+                  method: 'POST', headers: { 'content-type': 'application/json' },
+                  body: JSON.stringify({ agent }),
+                });
+                toast(`#${id} → ${agent}`);
+              } else {
+                // Moving to inbox = unassign — backend doesn't support null,
+                // so just refresh and let user reassign.
+                toast('inbox = unassigned (use a column to set agent)');
+              }
+              refreshKanban();
+            } catch (e) {
+              toast('move failed: ' + e.message, 'err');
+              refreshKanban();
+            }
+          },
+        });
+      });
+    }
   } catch (e) {
     $('#kanban').innerHTML = `<div class="empty">Error: ${esc(e.message)}</div>`;
   }
@@ -976,22 +1117,86 @@ async function agentInspect(name) {
   } catch (e) { toast(e.message, 'err'); }
 }
 function newAgentInfo() {
+  // A3 — Real agent creation form.
   openModal(`
-    <div class="modal-head"><h2>Add a new agent</h2><button class="x" onclick="closeModal()">✕</button></div>
+    <div class="modal-head"><h2>+ New Agent</h2><button class="x" onclick="closeModal()">✕</button></div>
     <div class="modal-body">
-      <p>Live in 90 seconds (V3 page 14):</p>
-      <ol style="line-height:1.7;color:var(--muted)">
-        <li>Copy <code>agents/_template/</code> to <code>agents/&lt;name&gt;/</code></li>
-        <li>Edit <code>agent.yaml</code> — set <code>name</code>, <code>model</code>, <code>tools</code></li>
-        <li>Edit <code>CLAUDE.md</code> — write a one-paragraph persona</li>
-        <li>Get a Telegram bot token from <a href="https://t.me/BotFather" target="_blank">@BotFather</a></li>
-        <li>Add the token to <code>.env</code> and refresh this page</li>
-      </ol>
+      <div class="field">
+        <label>Name (lowercase snake_case)</label>
+        <input id="na-name" placeholder="sales" pattern="[a-z][a-z0-9_]{1,15}" />
+      </div>
+      <div class="field">
+        <label>Role (one word)</label>
+        <input id="na-role" placeholder="customer_outreach" />
+      </div>
+      <div class="field">
+        <label>Description (one line)</label>
+        <input id="na-desc" placeholder="Outreach, lead qualification, follow-ups." />
+      </div>
+      <div class="field">
+        <label>Persona (one paragraph — written in second person, "You are…")</label>
+        <textarea id="na-persona" rows="4" placeholder="You are Sales — handle outreach to inbound leads..."></textarea>
+      </div>
+      <div class="row">
+        <div class="field grow">
+          <label>Model</label>
+          <select id="na-model">
+            <option value="claude-sonnet-4-6" selected>Sonnet 4.6</option>
+            <option value="claude-opus-4-6">Opus 4.6</option>
+            <option value="claude-haiku-4-5">Haiku 4.5</option>
+          </select>
+        </div>
+        <div class="field grow">
+          <label>Voice (war room)</label>
+          <select id="na-voice">
+            <option>Charon</option><option>Aoede</option><option>Leda</option>
+            <option>Alnilam</option><option>Kore</option>
+          </select>
+        </div>
+      </div>
+      <div class="muted" style="font-size:11px;line-height:1.5">
+        Creates <code>agents/&lt;name&gt;/agent.yaml</code> and <code>CLAUDE.md</code> from the template.
+        After save, you'll get a link to <a href="https://t.me/BotFather" target="_blank">@BotFather</a> to mint a Telegram token.
+      </div>
     </div>
     <div class="modal-foot">
-      <button class="btn primary" onclick="closeModal()">Got it</button>
+      <button class="btn ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn primary" onclick="newAgentSave()">Create</button>
     </div>
   `);
+  setTimeout(() => $('#na-name')?.focus(), 50);
+}
+async function newAgentSave() {
+  const body = {
+    name: $('#na-name').value.trim(),
+    role: $('#na-role').value.trim(),
+    description: $('#na-desc').value.trim(),
+    persona: $('#na-persona').value.trim(),
+    model: $('#na-model').value,
+    voice: $('#na-voice').value,
+  };
+  if (!body.name) return toast('name required', 'err');
+  try {
+    const r = await api('/api/agents', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    closeModal();
+    toast(`agent "${r.name}" created — see ${r.directory}`);
+    // Show next-steps modal.
+    openModal(`
+      <div class="modal-head"><h2>Agent created · Next steps</h2><button class="x" onclick="closeModal()">✕</button></div>
+      <div class="modal-body">
+        <p>Files written to <code>${esc(r.directory)}</code></p>
+        <ol style="line-height:1.7">
+          ${(r.next_steps || []).map(s => `<li>${esc(s)}</li>`).join('')}
+        </ol>
+        <p><a href="${esc(r.botfather_url)}" target="_blank" class="btn primary">Open @BotFather</a></p>
+      </div>
+      <div class="modal-foot"><button class="btn primary" onclick="closeModal()">Done</button></div>
+    `);
+    refreshAgents();
+  } catch (e) { toast('create failed: ' + e.message, 'err'); }
 }
 
 // ============================================================================

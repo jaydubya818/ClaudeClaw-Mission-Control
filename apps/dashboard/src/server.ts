@@ -16,6 +16,7 @@ import scheduleRoute from "./routes/schedule.js";
 import scheduledRoute from "./routes/scheduled.js";
 import auditRoute from "./routes/audit.js";
 import usageRoute from "./routes/usage.js";
+import meetingRoute from "./routes/meeting.js";
 
 const DB_PATH = process.env.DB_PATH ?? "./store/claudeclaw.db";
 const PORT = Number(process.env.DASHBOARD_PORT ?? 3141);
@@ -57,6 +58,7 @@ app.route("/api/schedule", scheduleRoute());
 app.route("/api/scheduled", scheduledRoute(db));
 app.route("/api/audit", auditRoute(db));
 app.route("/api/usage", usageRoute(db));
+app.route("/api/meeting", meetingRoute());
 
 app.use("/*", serveStatic({ root: "./public" }));
 

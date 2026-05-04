@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>War Room — Text Mode · ClaudeClaw</title>
+<style>
+  :root {
+    --bg: #0a0b10; --panel: #11131a; --panel-2: #161922;
+    --border: #1d2030; --border-2: #262a3c;
+    --text: #e6e9f0; --muted: #8b93a7; --muted-2: #5b6378;
+    --accent: #8b7cff; --accent-2: #b388ff;
+    --ok: #3ddc97; --err: #ff6b6b;
+    --blue: #4aa3ff; --pink: #ff7ac0; --green: #6ee7b7; --orange: #fb923c;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin:0; padding:0; height:100%; background:var(--bg); color:var(--text); font:14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+
+  .wr {
+    display: grid; height: 100vh;
+    grid-template-rows: 56px 1fr;
+    grid-template-columns: var(--side, 280px) 1fr;
+    grid-template-areas: "head head" "side main";
+  }
+  .wr-head {
+    grid-area: head; display:flex; align-items:center; gap:12px;
+    padding:0 18px; border-bottom:1px solid var(--border);
+  }
+  .wr-head .back { color:var(--muted); cursor:pointer; padding:6px; }
+  .wr-head h1 { margin:0; font-size:16px; font-weight:600; }
+  .wr-head .mode-tag { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.05em; }
+  .wr-head .timer { color:var(--muted); font-family:ui-monospace,monospace; font-size:12px; padding:3px 8px; border:1px solid var(--border-2); border-radius:5px; }
+  .wr-head .grow { flex:1; }
+  .wr-head .btn { font:inherit; background:var(--panel-2); color:var(--text); border:1px solid var(--border-2); padding:6px 12px; border-radius:6px; cursor:pointer; font-size:12px; }
+  .wr-head .btn.danger { color:var(--err); border-color:rgba(255,107,107,.3); }
+
+  .wr-side {
+    grid-area: side; background: var(--panel); border-right: 1px solid var(--border);
+    overflow-y: auto; padding: 12px;
+  }
+  .team-head { display:flex; align-items:center; gap:8px; margin-bottom:10px; padding: 0 4px;}
+  .team-head .label { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.04em; flex:1; }
+  .seg { display:inline-flex; background: var(--panel-2); border:1px solid var(--border-2); border-radius:6px; overflow:hidden; }
+  .seg button { background:transparent; color:var(--muted); border:0; padding:4px 8px; font-size:11px; cursor:pointer; }
+  .seg button.on { background:var(--accent); color:#fff; }
+
+  .agent-row {
+    display:flex; align-items:center; gap:10px; padding:8px;
+    border-radius:7px; cursor:pointer;
+    border: 2px solid transparent;
+    margin-bottom: 4px; transition: border-color .12s;
+  }
+  .agent-row:hover { background: rgba(255,255,255,.02); }
+  .agent-row.pinned { border-color: var(--accent); }
+  .agent-row .ava {
+    width: 36px; height: 36px; border-radius: 50%;
+    flex: 0 0 36px; display:flex; align-items:center; justify-content:center;
+    font-weight:700; color:#fff; font-size:14px;
+  }
+  .ava-main    { background: linear-gradient(135deg, #4aa3ff, #6c5ce7); }
+  .ava-meta    { background: linear-gradient(135deg, #6366f1, #2563eb); }
+  .ava-comms   { background: linear-gradient(135deg, #ec4899, #db2777); }
+  .ava-content { background: linear-gradient(135deg, #f59e0b, #d97706); }
+  .ava-ops     { background: linear-gradient(135deg, #10b981, #059669); }
+  .ava-research{ background: linear-gradient(135deg, #8b5cf6, #6d28d9); }
+  .agent-row .body { flex:1; min-width: 0; }
+  .agent-row .name { font-weight: 600; font-size: 13px; display:flex; align-items:center; gap: 4px; }
+  .agent-row .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); display:inline-block; }
+  .agent-row .last { color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* Layout sizes */
+  .wr.size-s { --side: 200px; }
+  .wr.size-s .agent-row .ava { width: 28px; height: 28px; flex-basis: 28px; font-size:12px; }
+  .wr.size-s .agent-row .last { display: none; }
+  .wr.size-l { --side: 360px; }
+  .wr.size-l .agent-row .ava { width: 44px; height: 44px; flex-basis: 44px; font-size: 16px; }
+  .wr.size-l .agent-row .body { padding-left: 4px; }
+  .wr.size-l .agent-row .last { -webkit-line-clamp: 2; display: -webkit-box; -webkit-box-orient: vertical; white-space: normal; max-height: 2.6em; }
+
+  .wr-main {
+    grid-area: main; display: flex; flex-direction: column;
+    background: var(--bg);
+  }
+  .feed {
+    flex: 1; overflow-y: auto; padding: 18px 24px;
+  }
+  .msg { padding: 12px 0; max-width: 800px; }
+  .msg .head { display:flex; gap: 10px; align-items: center; margin-bottom: 4px; }
+  .msg .ava-sm { width: 24px; height: 24px; border-radius: 50%; flex: 0 0 24px; display: flex; align-items: center; justify-content: center; font-weight: 700; color: #fff; font-size: 11px; }
+  .msg .who { font-weight: 600; font-size: 13px; }
+  .msg .ts { color: var(--muted); font-size: 11px; }
+  .msg.user .body { background: var(--accent); color: #fff; padding: 8px 12px; border-radius: 8px; max-width: 70%; margin-left: auto; }
+  .msg.user { display: flex; justify-content: flex-end; }
+  .msg .body { padding: 4px 0; }
+  .msg .reflecting { color: var(--muted); font-style: italic; padding: 8px 12px; background: var(--panel-2); border-radius: 8px; display: inline-block; }
+  .msg pre { white-space: pre-wrap; word-wrap: break-word; margin: 0; font: inherit; }
+
+  .composer {
+    border-top: 1px solid var(--border); padding: 12px 24px;
+    display: flex; gap: 8px; align-items: flex-end; background: var(--panel);
+  }
+  .composer textarea {
+    flex: 1; background: var(--panel-2); color: var(--text);
+    border: 1px solid var(--border-2); border-radius: 8px;
+    padding: 10px 12px; font: inherit; resize: none; min-height: 40px; max-height: 200px;
+    outline: none;
+  }
+  .composer textarea:focus { border-color: var(--accent); }
+  .composer .send { background: var(--accent); color: #fff; border: 0; padding: 10px 18px; border-radius: 7px; cursor: pointer; font: inherit; font-weight: 600; }
+  .composer .hints { color: var(--muted); font-size: 11px; margin-top: 4px; }
+
+  .toast {
+    position: fixed; bottom: 18px; right: 18px;
+    background: var(--panel); border-left: 3px solid var(--ok);
+    padding: 10px 14px; border-radius: 7px; opacity: 0; transition: opacity .2s;
+    pointer-events: none; z-index: 100; font-size: 13px;
+  }
+  .toast.show { opacity: 1; }
+  .toast.err { border-left-color: var(--err); }
+</style>
+</head>
+<body>
+<div class="wr size-m" id="wr">
+  <div class="wr-head">
+    <div class="back" onclick="location.href='/'">←</div>
+    <div>
+      <h1>War Room</h1>
+      <div class="mode-tag">Text mode</div>
+    </div>
+    <div class="grow"></div>
+    <div class="timer" id="timer">0:00</div>
+    <button class="btn" onclick="location.href='/?mode=voice'">🎙 Voice mode</button>
+    <button class="btn danger" onclick="endMeeting()">End meeting</button>
+  </div>
+
+  <aside class="wr-side">
+    <div class="team-head">
+      <span class="label">Team</span>
+      <div class="seg">
+        <button class="" onclick="setSize('s')" data-size="s">S</button>
+        <button class="on" onclick="setSize('m')" data-size="m">M</button>
+        <button class="" onclick="setSize('l')" data-size="l">L</button>
+      </div>
+    </div>
+    <div id="agents"></div>
+  </aside>
+
+  <main class="wr-main">
+    <div id="feed" class="feed"></div>
+    <div>
+      <div class="composer">
+        <textarea id="input" placeholder="Type a message · /standup · /discuss <topic> · @agent ..." rows="1"></textarea>
+        <button class="send" onclick="sendMessage()">Send</button>
+      </div>
+      <div class="hints" style="padding:0 24px 10px">
+        Slash commands: /standup [@a @b], /discuss &lt;topic&gt; · Click an agent to pin
+      </div>
+    </div>
+  </main>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = (s, c=document) => c.querySelector(s);
+const $$ = (s, c=document) => [...c.querySelectorAll(s)];
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const AGENTS = ['main', 'meta', 'comms', 'content', 'ops', 'research'];
+
+const start = Date.now();
+function tick() {
+  const s = Math.floor((Date.now() - start) / 1000);
+  $('#timer').textContent = `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+}
+setInterval(tick, 1000); tick();
+
+function toast(msg, kind) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (kind === 'err' ? ' err' : '');
+  setTimeout(() => t.className = 'toast' + (kind === 'err' ? ' err' : ''), 2200);
+}
+
+function setSize(s) {
+  $('#wr').className = 'wr size-' + s;
+  localStorage.setItem('wr_size', s);
+  $$('.seg button').forEach(b => b.classList.toggle('on', b.dataset.size === s));
+}
+const savedSize = localStorage.getItem('wr_size');
+if (savedSize) setSize(savedSize);
+
+let pinnedAgent = null;
+async function loadAgents() {
+  try {
+    // Pull agents + last-task summary from dashboard API.
+    // Fall back to a static list if dashboard not running.
+    const data = await fetch('http://localhost:3141/api/agents').then(r => r.ok ? r.json() : null).catch(() => null);
+    const agents = data?.agents ?? AGENTS.map(name => ({ name, today_turns: 0, model: 'sonnet' }));
+
+    // Pull last hive_mind summary per agent.
+    const lastByAgent = {};
+    for (const a of agents) {
+      try {
+        const recent = await fetch(`http://localhost:3141/api/agents/${a.name}/recent`).then(r => r.ok ? r.json() : null);
+        if (recent?.rows?.[0]) lastByAgent[a.name] = recent.rows[0].reply.slice(0, 80);
+      } catch {}
+    }
+
+    $('#agents').innerHTML = agents.map(a => `
+      <div class="agent-row ${a.name === pinnedAgent ? 'pinned' : ''}" onclick="pinAgent('${esc(a.name)}')">
+        <div class="ava ava-${a.name}">${a.name[0].toUpperCase()}</div>
+        <div class="body">
+          <div class="name"><span class="dot"></span>${a.name[0].toUpperCase()+a.name.slice(1)}</div>
+          <div class="last">${esc(lastByAgent[a.name] || 'No activity yet — @' + a.name)}</div>
+        </div>
+      </div>
+    `).join('');
+  } catch (e) {
+    $('#agents').innerHTML = `<div style="color:var(--err);padding:10px;font-size:12px">${esc(e.message)}</div>`;
+  }
+}
+loadAgents();
+setInterval(loadAgents, 20000);
+
+function pinAgent(name) {
+  pinnedAgent = pinnedAgent === name ? null : name;
+  loadAgents();
+  toast(pinnedAgent ? `pinned: ${pinnedAgent}` : 'unpinned');
+}
+
+function appendMsg(role, text, opts) {
+  const reflecting = opts?.reflecting;
+  const initial = role[0].toUpperCase();
+  const html = role === 'user'
+    ? `<div class="msg user"><div class="body">${esc(text)}</div></div>`
+    : `<div class="msg" data-role="${esc(role)}">
+         <div class="head">
+           <div class="ava-sm ava-${role}">${initial}</div>
+           <div class="who">${role[0].toUpperCase()+role.slice(1)}</div>
+           <div class="ts">${new Date().toLocaleTimeString([], {hour:'numeric', minute:'2-digit'})}</div>
+         </div>
+         ${reflecting
+           ? '<div class="reflecting">… reflecting</div>'
+           : `<div class="body"><pre>${esc(text)}</pre></div>`}
+       </div>`;
+  $('#feed').insertAdjacentHTML('beforeend', html);
+  $('#feed').scrollTop = $('#feed').scrollHeight;
+}
+
+async function sendMessage() {
+  const ta = $('#input');
+  const text = ta.value.trim();
+  if (!text) return;
+  ta.value = '';
+  appendMsg('user', text);
+
+  // Slash commands → call dashboard's bridge or warroom WS
+  if (text.startsWith('/')) {
+    await runSlash(text);
+    return;
+  }
+
+  // Tagged single agent: @agent rest...
+  const tagMatch = text.match(/^@(\w+)\s+(.+)$/);
+  let target = pinnedAgent || (tagMatch ? tagMatch[1] : 'main');
+  let prompt = tagMatch ? tagMatch[2] : text;
+  if (!AGENTS.includes(target)) target = 'main';
+
+  // Show reflecting indicator.
+  appendMsg(target, '', { reflecting: true });
+  const reflecting = $('#feed').lastElementChild;
+
+  try {
+    // Direct invocation requires the warroom server's `/api/text` endpoint
+    // which doesn't exist yet — fall back to enqueuing via dashboard bridge.
+    const r = await fetch(`http://localhost:3141/api/agents/${target}/recent?limit=1`);
+    const data = r.ok ? await r.json() : null;
+    reflecting.remove();
+    appendMsg(target, `(text-mode requires the warroom server's /api/text endpoint, not yet wired into apps/warroom/server.py — your message was logged but no agent response yet)\n\nLast-known reply from ${target}:\n${data?.rows?.[0]?.reply?.slice(0,400) ?? '(none)'}`);
+  } catch (e) {
+    reflecting.remove();
+    appendMsg(target, `Error: ${e.message}`);
+  }
+}
+
+async function runSlash(text) {
+  const cmd = text.split(/\s+/, 1)[0].toLowerCase();
+  if (cmd === '/standup' || cmd === '/discuss') {
+    // Show reflecting per agent. Real wiring requires warroom server WS.
+    AGENTS.filter(a => a !== 'main').forEach(a => appendMsg(a, '', { reflecting: true }));
+    setTimeout(() => {
+      $$('.msg [data-role]').forEach(el => {
+        if (el.querySelector('.reflecting')) {
+          el.querySelector('.reflecting').textContent = `(stub) /standup result for ${el.dataset?.role}`;
+          el.querySelector('.reflecting').classList.remove('reflecting');
+        }
+      });
+      appendMsg('main', '(stub) Main consolidation. Wire warroom/server.py /api/text to make this real.');
+    }, 1500);
+    return;
+  }
+  appendMsg('main', `Unknown command: ${cmd}. Try /standup, /discuss <topic>, or @agent message.`);
+}
+
+function endMeeting() {
+  if (confirm('End the meeting?')) location.href = '/';
+}
+
+$('#input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
+</script>
+</body>
+</html>
