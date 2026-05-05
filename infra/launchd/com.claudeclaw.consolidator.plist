@@ -9,14 +9,14 @@
   <array>
     <string>/bin/sh</string>
     <string>-c</string>
-    <string>cd /Users/jay/claudeclaw &amp;&amp; .venv/bin/python memory/extractor.py &amp;&amp; .venv/bin/python memory/consolidator.py</string>
+    <string>cd /Users/jaywest/claudeclaw &amp;&amp; .venv/bin/python memory/extractor.py &amp;&amp; .venv/bin/python memory/consolidator.py</string>
   </array>
 
   <key>StartInterval</key><integer>1800</integer>
 
   <key>RunAtLoad</key><true/>
 
-  <key>StandardOutPath</key><string>/Users/jay/Library/Logs/claudeclaw/consolidator.out</string>
-  <key>StandardErrorPath</key><string>/Users/jay/Library/Logs/claudeclaw/consolidator.err</string>
+  <key>StandardOutPath</key><string>/Users/jaywest/Library/Logs/claudeclaw/consolidator.out</string>
+  <key>StandardErrorPath</key><string>/Users/jaywest/Library/Logs/claudeclaw/consolidator.err</string>
 </dict>
 </plist>

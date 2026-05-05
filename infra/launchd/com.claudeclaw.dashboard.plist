@@ -8,10 +8,10 @@
   <array>
     <string>/usr/local/bin/node</string>
     <string>--import=tsx</string>
-    <string>/Users/jay/claudeclaw/apps/dashboard/src/server.ts</string>
+    <string>/Users/jaywest/claudeclaw/apps/dashboard/src/server.ts</string>
   </array>
 
-  <key>WorkingDirectory</key><string>/Users/jay/claudeclaw/apps/dashboard</string>
+  <key>WorkingDirectory</key><string>/Users/jaywest/claudeclaw/apps/dashboard</string>
   <key>EnvironmentVariables</key>
   <dict>
     <key>PATH</key><string>/usr/local/bin:/usr/bin:/bin</string>
@@ -20,7 +20,7 @@
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
 
-  <key>StandardOutPath</key><string>/Users/jay/Library/Logs/claudeclaw/dashboard.out</string>
-  <key>StandardErrorPath</key><string>/Users/jay/Library/Logs/claudeclaw/dashboard.err</string>
+  <key>StandardOutPath</key><string>/Users/jaywest/Library/Logs/claudeclaw/dashboard.out</string>
+  <key>StandardErrorPath</key><string>/Users/jaywest/Library/Logs/claudeclaw/dashboard.err</string>
 </dict>
 </plist>
