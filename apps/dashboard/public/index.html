@@ -1473,21 +1473,29 @@ function renderHive2D(data) {
     style: [
       { selector: 'node[type="agent"]', style: {
         'background-color': '#8b7cff', 'label': 'data(label)',
-        'color': '#fff', 'font-size': '12px', 'font-weight': 'bold',
-        'width': 'mapData(size, 0, 50, 30, 70)', 'height': 'mapData(size, 0, 50, 30, 70)',
+        'color': '#fff', 'font-size': '10px', 'font-weight': 'bold',
+        'width': 'mapData(size, 0, 50, 36, 64)', 'height': 'mapData(size, 0, 50, 36, 64)',
+        'min-width': 36, 'min-height': 36,
         'text-valign': 'center', 'text-halign': 'center',
+        'text-wrap': 'wrap', 'text-max-width': 60,
       }},
       { selector: 'node[type="task"]', style: {
         'background-color': '#3ddc97', 'label': 'data(label)',
-        'color': '#e6e9f0', 'font-size': '9px', 'width': 14, 'height': 14,
-        'text-valign': 'bottom', 'text-margin-y': 3, 'text-max-width': 120, 'text-wrap': 'ellipsis',
+        'color': '#e6e9f0', 'font-size': '8px',
+        'width': 12, 'height': 12,
+        'text-valign': 'bottom', 'text-margin-y': 4,
+        'text-max-width': 100, 'text-wrap': 'ellipsis',
+        'text-overflow-wrap': 'anywhere',
       }},
       { selector: 'edge[type="assigned"]', style: { 'width': 1, 'line-color': '#262a3c', 'curve-style': 'bezier' }},
       { selector: 'edge[type="next"]',     style: { 'width': 1, 'line-color': '#1d2030', 'line-style': 'dashed', 'curve-style': 'bezier' }},
     ],
-    layout: { name: 'cose', animate: false, idealEdgeLength: 90 },
+    layout: { name: 'cose', animate: false, idealEdgeLength: 90, padding: 60 },
     wheelSensitivity: 0.2,
+    minZoom: 0.3,
+    maxZoom: 1.5,        // prevents font from blowing up when there are few nodes
   });
+  _cy.ready(() => { _cy.fit(undefined, 60); });
 }
 function renderHive3D() {
   $('#hive-content').innerHTML = `
