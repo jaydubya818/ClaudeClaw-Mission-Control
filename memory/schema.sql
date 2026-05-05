@@ -88,10 +88,17 @@ CREATE TABLE IF NOT EXISTS tasks (
   agent        TEXT,                 -- NULL until auto-assigned
   priority     TEXT    NOT NULL DEFAULT 'medium',
   status       TEXT    NOT NULL DEFAULT 'queued',  -- queued|live|done|failed
+  result       TEXT,                 -- agent reply when status='done'
+  error        TEXT,                 -- failure reason when status='failed'
+  cost_usd     REAL    DEFAULT 0,
+  tokens       INTEGER DEFAULT 0,
+  started_at   INTEGER,              -- when status flipped to 'live'
+  finished_at  INTEGER,              -- when status flipped to 'done'/'failed'
   created_at   INTEGER NOT NULL,
   updated_at   INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+CREATE INDEX IF NOT EXISTS idx_tasks_agent_status ON tasks(agent, status);
 
 -- Scheduled tasks (mutable mission editor — V3 transcript ch.10).
 -- Coexists with scheduler/cron.yaml: yaml stays the source of truth for

@@ -152,6 +152,11 @@
   .kanban-card:active { cursor: grabbing; }
   .kanban-card-ghost { opacity: 0.4; background: var(--accent); }
   .kanban-cards { min-height: 40px; }
+  .kanban-card[data-status="live"] { border-color: var(--blue); box-shadow: 0 0 0 1px rgba(74,163,255,.3); }
+  .kanban-card[data-status="done"] { border-color: rgba(61,220,151,.4); }
+  .kanban-card[data-status="failed"] { border-color: rgba(255,107,107,.4); }
+  @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  .spin { display: inline-block; animation: spin 1s linear infinite; }
   .kanban-card .meta { color: var(--muted); font-size: 11px; margin-bottom: 4px; display: flex; gap: 8px; }
   .kanban-card .title { font-size: 13px; margin-bottom: 8px; }
   .kanban-card .row {
@@ -583,17 +588,26 @@ async function refreshKanban() {
       api('/api/tasks'),
       api('/api/agents'),
     ]);
+    const showDone = localStorage.getItem('cc_show_done') === '1';
     const cols = ['inbox', ...agents.map(a => a.name)];
     const byCol = Object.fromEntries(cols.map(c => [c, []]));
-    let live = 0, unassigned = 0;
+    let live = 0, unassigned = 0, done = 0, failed = 0;
     for (const t of rows) {
-      if (t.status === 'done' || t.status === 'failed') continue;
+      if (t.status === 'done') { done++; if (!showDone) continue; }
+      if (t.status === 'failed') { failed++; }
       if (t.agent && byCol[t.agent]) byCol[t.agent].push(t);
       else { byCol.inbox.push(t); unassigned++; }
       if (t.status === 'live') live++;
     }
-    $('#km-counts').textContent =
-      `${live} active · ${unassigned} unassigned · ${rows.length} total`;
+    // Sort each column: live → queued → failed → done.
+    const order = { live: 0, queued: 1, failed: 2, done: 3 };
+    for (const c of cols) byCol[c].sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9));
+    $('#km-counts').innerHTML =
+      `${live} active · ${unassigned} unassigned · ${done} done · ${failed} failed · ${rows.length} total
+       <label style="margin-left:12px;font-size:11px;cursor:pointer">
+         <input type="checkbox" ${showDone?'checked':''} onchange="toggleShowDone(this.checked)" />
+         show done
+       </label>`;
     const renderHtml = cols.map(col => {
       const isInbox = col === 'inbox';
       const tasks = byCol[col];
@@ -608,25 +622,7 @@ async function refreshKanban() {
             ${!isInbox ? `<div class="live-dot">●</div>` : ''}
           </div>
           <div class="kanban-cards" data-col="${col}">
-          ${tasks.length ? tasks.map(t => `
-            <div class="kanban-card" data-id="${t.id}">
-              <div class="meta">
-                <span>${esc(t.agent || 'unassigned')}</span>
-                <span>${ago(t.created_at)}</span>
-              </div>
-              <div class="title">${esc(t.title)}</div>
-              <div class="row">
-                ${!t.agent ? `<button class="btn sm ghost" onclick="autoAssign(${t.id})">✦ Auto</button>` : ''}
-                <select onchange="manualAssign(${t.id}, this.value)">
-                  <option value="">${t.agent ? 'Reassign…' : 'Assign to…'}</option>
-                  ${AGENTS.map(a => `<option value="${a}" ${t.agent===a?'selected':''}>${a}</option>`).join('')}
-                </select>
-                <button class="btn sm ghost danger" onclick="deleteTask(${t.id})" title="Delete">🗑</button>
-              </div>
-              ${t.status === 'queued' ? `<div class="row" style="margin-top:6px"><button class="btn sm" onclick="setTaskStatus(${t.id},'live')">Set live</button></div>` : ''}
-              ${t.status === 'live' ? `<div class="row" style="margin-top:6px"><button class="btn sm" onclick="setTaskStatus(${t.id},'done')">Mark done</button></div>` : ''}
-            </div>
-          `).join('') : '<div class="kanban-empty">Drop tasks here</div>'}
+          ${tasks.length ? tasks.map(t => renderTaskCard(t)).join('') : '<div class="kanban-empty">Drop tasks here</div>'}
           </div>
         </div>
       `;
@@ -669,12 +665,78 @@ async function refreshKanban() {
   }
 }
 
+function renderTaskCard(t) {
+  const statusColor = t.status === 'live' ? 'var(--blue)' :
+                      t.status === 'done' ? 'var(--ok)' :
+                      t.status === 'failed' ? 'var(--err)' : 'var(--muted)';
+  const spinner = t.status === 'live'
+    ? '<span class="spin">◐</span>'
+    : t.status === 'done' ? '✓'
+    : t.status === 'failed' ? '✗' : '';
+  const result = (t.result || '').trim();
+  const error = (t.error || '').trim();
+  return `
+    <div class="kanban-card" data-id="${t.id}" data-status="${esc(t.status)}">
+      <div class="meta">
+        <span>${esc(t.agent || 'unassigned')}</span>
+        <span style="margin-left:auto;color:${statusColor}">${spinner} ${esc(t.status)}</span>
+      </div>
+      <div class="title">${esc(t.title)}</div>
+      ${t.description ? `<div class="muted" style="font-size:11px;margin-top:4px">${esc(t.description.slice(0,160))}${t.description.length>160?'…':''}</div>` : ''}
+      ${result ? `<details style="margin-top:6px"><summary style="cursor:pointer;color:var(--ok);font-size:11px">✓ Result · ${(+t.cost_usd||0).toFixed(4)}$</summary><pre style="margin:6px 0 0;padding:8px;background:#0b0c10;border-radius:6px;font-size:11px;white-space:pre-wrap;max-height:240px;overflow:auto">${esc(result)}</pre></details>` : ''}
+      ${error ? `<details style="margin-top:6px"><summary style="cursor:pointer;color:var(--err);font-size:11px">✗ Error</summary><pre style="margin:6px 0 0;padding:8px;background:#0b0c10;border-radius:6px;font-size:11px;color:var(--err);white-space:pre-wrap">${esc(error)}</pre></details>` : ''}
+      <div class="row" style="margin-top:6px">
+        ${!t.agent ? `<button class="btn sm ghost" onclick="autoAssign(${t.id})">✦ Auto</button>` : ''}
+        <select onchange="manualAssign(${t.id}, this.value)" ${t.status === 'live' ? 'disabled' : ''}>
+          <option value="">${t.agent ? 'Reassign…' : 'Assign to…'}</option>
+          ${AGENTS.map(a => `<option value="${a}" ${t.agent===a?'selected':''}>${a}</option>`).join('')}
+        </select>
+        <button class="btn sm ghost danger" onclick="deleteTaskHard(${t.id})" title="Delete">🗑</button>
+      </div>
+      <div class="row" style="margin-top:6px">
+        ${t.status === 'queued' && t.agent ? `<button class="btn sm primary" onclick="runTask(${t.id})">▶ Run</button>` : ''}
+        ${t.status === 'live' ? `<button class="btn sm" disabled>⏳ Running…</button>` : ''}
+        ${t.status === 'done' ? `<button class="btn sm ghost" onclick="retryTask(${t.id})">↻ Retry</button>` : ''}
+        ${t.status === 'failed' ? `<button class="btn sm" onclick="retryTask(${t.id})">↻ Retry</button>` : ''}
+      </div>
+    </div>
+  `;
+}
 async function autoAssign(id) {
   try {
     const r = await api(`/api/tasks/${id}/auto-assign`, { method: 'POST' });
     toast(`#${id} → ${r.agent ?? r.error}`, r.error ? 'err' : 'ok');
     refreshKanban();
   } catch (e) { toast('auto-assign failed: ' + e.message, 'err'); }
+}
+async function runTask(id) {
+  try {
+    const r = await api(`/api/tasks/${id}/run`, { method: 'POST' });
+    if (r.ok) {
+      toast(`▶ #${id} dispatched to bridge`);
+    } else {
+      toast(`run failed: ${r.reason || 'unknown'}`, 'err');
+    }
+    refreshKanban();
+  } catch (e) { toast('run failed: ' + e.message, 'err'); }
+}
+async function retryTask(id) {
+  try {
+    await api(`/api/tasks/${id}/retry`, { method: 'POST' });
+    await runTask(id);
+  } catch (e) { toast('retry failed: ' + e.message, 'err'); }
+}
+function toggleShowDone(checked) {
+  localStorage.setItem('cc_show_done', checked ? '1' : '0');
+  refreshKanban();
+}
+async function deleteTaskHard(id) {
+  if (!confirm('Delete this task permanently?')) return;
+  try {
+    await api(`/api/tasks/${id}`, { method: 'DELETE' });
+    toast(`#${id} deleted`);
+    refreshKanban();
+  } catch (e) { toast('delete failed: ' + e.message, 'err'); }
 }
 async function manualAssign(id, agent) {
   if (!agent) return;

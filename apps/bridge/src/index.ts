@@ -18,6 +18,7 @@ import { parseStandupCommand, runStandupCommand } from "./standup.js";
 import { runSuggestCommand } from "./suggest.js";
 import { rotateAuditIfLarge } from "./log-rotation.js";
 import { runInsightsCommand } from "./insights-cmd.js";
+import { runTask } from "./task-runner.js";
 
 // --- config ---
 const TOKEN = must("TELEGRAM_BOT_TOKEN");
@@ -44,23 +45,47 @@ log("bridge up", { allowed: [...ALLOWED] });
 import { createServer } from "node:http";
 const INTERNAL_PORT = Number(process.env.BRIDGE_INTERNAL_PORT ?? 3142);
 createServer(async (req, res) => {
-  if (req.method !== "POST" || req.url !== "/enqueue") {
-    res.writeHead(404).end();
-    return;
-  }
   let body = "";
   for await (const chunk of req) body += chunk;
-  try {
-    const { chatId, text } = JSON.parse(body);
-    if (!ALLOWED.has(String(chatId))) {
-      res.writeHead(403).end("not allowed");
-      return;
+
+  // Mission Control task execution: POST /run-task { task_id, notify_chat_id? }
+  if (req.method === "POST" && req.url === "/run-task") {
+    try {
+      const { task_id, notify_chat_id } = JSON.parse(body);
+      if (typeof task_id !== "number") {
+        res.writeHead(400).end(JSON.stringify({ error: "task_id required" }));
+        return;
+      }
+      // Fire and forget — runTask updates the tasks table directly.
+      runTask(db, task_id, notify_chat_id ? async (msg) => {
+        try { await bot.sendMessage(notify_chat_id, msg); } catch { /* ignore */ }
+      } : undefined).then(r => {
+        log("task.run", { task_id, ok: r.ok, reason: r.reason });
+      }).catch(e => log("task.run.error", { task_id, err: String(e) }));
+      res.writeHead(202).end(JSON.stringify({ accepted: true, task_id }));
+    } catch (e) {
+      res.writeHead(400).end(String(e));
     }
-    fifo.enqueue(String(chatId), () => handle(String(chatId), text)).catch(() => {});
-    res.writeHead(202).end("queued");
-  } catch (e) {
-    res.writeHead(400).end(String(e));
+    return;
   }
+
+  // Original Telegram-style enqueue
+  if (req.method === "POST" && req.url === "/enqueue") {
+    try {
+      const { chatId, text } = JSON.parse(body);
+      if (!ALLOWED.has(String(chatId))) {
+        res.writeHead(403).end("not allowed");
+        return;
+      }
+      fifo.enqueue(String(chatId), () => handle(String(chatId), text)).catch(() => {});
+      res.writeHead(202).end("queued");
+    } catch (e) {
+      res.writeHead(400).end(String(e));
+    }
+    return;
+  }
+
+  res.writeHead(404).end();
 }).listen(INTERNAL_PORT, "127.0.0.1", () =>
   log("bridge.internal up", { port: INTERNAL_PORT }),
 );

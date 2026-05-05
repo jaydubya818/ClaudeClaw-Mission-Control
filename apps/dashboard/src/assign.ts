@@ -3,18 +3,36 @@
 
 const MODEL = "gemini-2.5-flash";
 
-const SYSTEM = `You are a task router. Given a task description, reply with exactly one of:
-main, meta, comms, content, ops, research
+// Few-shot prompt — biases the classifier toward specialists, away from
+// the "main" fallback which was over-triggering on obvious specialist tasks.
+const SYSTEM = `You are a task router. Reply with EXACTLY one lowercase word from:
+main · meta · comms · content · ops · research
 
-Guide:
-- meta = Meta/Facebook/Instagram ads, ROAS, ad creative refreshes, paid acquisition
-- comms = email, DMs, inbox triage, Slack, Telegram posting
-- content = YouTube scripts, thumbnails, organic posts, creative writing
-- ops = finances, vendors, expenses, business operations (read-only on money)
-- research = web research, analysis, memos, deep dives
-- main = fallback when unclear; delegates further
+Match by intent, not surface keywords. Pick the SPECIALIST when the task
+clearly fits one. Use "main" only if no specialist fits or the task is
+purely conversational triage.
 
-Reply with the single word only, lowercase.`;
+Specialist guide:
+- meta:     Meta/Facebook/Instagram ads, ROAS, ad spend, ad creative
+- comms:    email, DMs, replies, inbox triage, Slack/Telegram posting
+- content:  YouTube scripts, thumbnails, blog posts, social posts, creative writing, video ideas
+- ops:      finances, vendors, invoices, scheduling, calendar, billing
+- research: web research, deep dives, analysis, market reports, learning a topic, "research X", "what is X"
+- main:     ambiguous, conversational, or pure delegation
+
+Examples:
+- "research netflix culture" → research
+- "draft an email to dan" → comms
+- "make a thumbnail for the V3 video" → content
+- "what did ops do today" → main
+- "pull yesterday's roas" → meta
+- "categorize last week's expenses" → ops
+- "summarize the new openai paper" → research
+- "compare X to Y" → research
+- "write a tweet about Z" → content
+- "reply to the linkedin DM" → comms
+
+Reply with the single specialist word only — lowercase, no punctuation.`;
 
 export async function pickAgent(task: { title: string; description?: string }): Promise<string> {
   const key = process.env.GEMINI_API_KEY;
