@@ -440,6 +440,7 @@
 <body>
 <script src="https://unpkg.com/cytoscape@3.30.2/dist/cytoscape.min.js"></script>
 <script src="https://unpkg.com/sortablejs@1.15.2/Sortable.min.js"></script>
+<script src="https://unpkg.com/three@0.158.0/build/three.min.js"></script>
 
 <div class="app">
   <!-- ============== SIDEBAR ============== -->
@@ -473,7 +474,14 @@
 
     <div class="nav-section">
       <div class="label"><span class="chev">▾</span> COLLABORATE</div>
-      <div class="nav-link" data-route="warroom"><span class="ico">✕</span> War Room <span id="wr-status-dot"></span></div>
+      <div class="nav-link" data-route="warroom"><span class="ico">✕</span> War Room <span id="wr-status-dot" style="margin-left:auto"></span></div>
+    </div>
+
+    <div class="nav-section">
+      <div class="label"><span class="chev">▾</span> SERVICES</div>
+      <div class="nav-link" style="cursor:default" id="svc-bridge"><span class="ico">●</span> Bridge :3142 <span style="margin-left:auto;font-size:10px" id="svc-bridge-state">…</span></div>
+      <div class="nav-link" style="cursor:default" id="svc-warroom"><span class="ico">●</span> War Room :7860 <span style="margin-left:auto;font-size:10px" id="svc-warroom-state">…</span></div>
+      <div class="nav-link" style="cursor:default" id="svc-meeting"><span class="ico">●</span> Meetings :7861 <span style="margin-left:auto;font-size:10px" id="svc-meeting-state">…</span></div>
     </div>
 
     <div class="nav-section" style="margin-top:auto">
@@ -551,6 +559,8 @@ const routes = {
 };
 function navigate() {
   const r = (location.hash.slice(1) || 'mission');
+  // Tear down 3D scene when leaving hive page.
+  if (r !== 'hive' && _hive3d?.dispose) { _hive3d.dispose(); _hive3d = null; }
   $$('.nav-link').forEach(el => el.classList.toggle('active', el.dataset.route === r));
   const fn = routes[r] || routes.mission;
   fn();
@@ -564,22 +574,30 @@ $$('.nav-link').forEach(el => {
 // PAGE: Mission Control (kanban — V3 transcript ch.7)
 // ============================================================================
 async function renderMission() {
+  const layout = localStorage.getItem('cc_mc_layout') || 'kanban';
   $('#main').innerHTML = `
     <div class="page-header">
       <h1>Mark's Lab · Tasks</h1>
       <div class="kanban-counts" id="km-counts">…</div>
       <div class="header-actions">
-        <button class="btn ghost"><span>⊞</span> Layout</button>
+        <div class="seg" style="margin-right:8px">
+          <button class="${layout==='kanban'?'on':''}" onclick="setLayout('kanban')">⊞ Kanban</button>
+          <button class="${layout==='table'?'on':''}" onclick="setLayout('table')">≡ Table</button>
+        </div>
         <button class="btn ghost"><span>⟲</span> History</button>
         <button class="btn ghost" onclick="autoAssignAll()">✦ Auto-assign all</button>
         <button class="btn primary" onclick="newTaskModal()">+ New Task</button>
       </div>
     </div>
     <div class="page-body">
-      <div class="kanban" id="kanban">Loading…</div>
+      <div id="mc-content">Loading…</div>
     </div>
   `;
   await refreshKanban();
+}
+function setLayout(l) {
+  localStorage.setItem('cc_mc_layout', l);
+  renderMission();
 }
 
 async function refreshKanban() {
@@ -608,6 +626,11 @@ async function refreshKanban() {
          <input type="checkbox" ${showDone?'checked':''} onchange="toggleShowDone(this.checked)" />
          show done
        </label>`;
+    const layout = localStorage.getItem('cc_mc_layout') || 'kanban';
+    if (layout === 'table') {
+      renderMissionTable(rows, showDone);
+      return;
+    }
     const renderHtml = cols.map(col => {
       const isInbox = col === 'inbox';
       const tasks = byCol[col];
@@ -627,7 +650,8 @@ async function refreshKanban() {
         </div>
       `;
     }).join('');
-    $('#kanban').innerHTML = renderHtml;
+    // Wrap the rendered cols in #kanban container (id is now #mc-content).
+    $('#mc-content').innerHTML = `<div class="kanban" id="kanban">${renderHtml}</div>`;
     // A4 — wire Sortable on each column.
     if (typeof Sortable !== 'undefined') {
       $$('.kanban-cards').forEach(el => {
@@ -661,8 +685,65 @@ async function refreshKanban() {
       });
     }
   } catch (e) {
-    $('#kanban').innerHTML = `<div class="empty">Error: ${esc(e.message)}</div>`;
+    $('#mc-content').innerHTML = `<div class="empty">Error: ${esc(e.message)}</div>`;
   }
+}
+
+async function showResultModal(id) {
+  try {
+    const t = await api(`/api/tasks/${id}`);
+    openModal(`
+      <div class="modal-head">
+        <h2>#${id} · ${esc(t.title)}</h2>
+        <button class="x" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="row" style="margin-bottom:10px;font-size:11px;color:var(--muted)">
+          <span>agent: ${esc(t.agent || '—')}</span>
+          <span>status: ${esc(t.status)}</span>
+          <span>${t.tokens || 0} tokens · $${(+t.cost_usd||0).toFixed(4)}</span>
+          ${t.started_at && t.finished_at ? `<span>${t.finished_at - t.started_at}s</span>` : ''}
+        </div>
+        ${t.error ? `<div class="field"><label>Error</label><pre style="margin:0;padding:10px;background:#0b0c10;border-radius:6px;color:var(--err);white-space:pre-wrap;font-size:12px;max-height:60vh;overflow:auto">${esc(t.error)}</pre></div>` : ''}
+        ${t.result ? `<div class="field"><label>Result</label><pre style="margin:0;padding:10px;background:#0b0c10;border-radius:6px;white-space:pre-wrap;font-size:12px;max-height:60vh;overflow:auto;line-height:1.5">${esc(t.result)}</pre></div>` : ''}
+      </div>
+      <div class="modal-foot">
+        <button class="btn ghost" onclick="closeModal()">Close</button>
+        ${t.status === 'done' || t.status === 'failed' ? `<button class="btn" onclick="closeModal(); retryTask(${id})">↻ Retry</button>` : ''}
+      </div>
+    `);
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+function renderMissionTable(rows, showDone) {
+  const filtered = showDone ? rows : rows.filter(r => r.status !== 'done');
+  const order = { live: 0, queued: 1, failed: 2, done: 3 };
+  filtered.sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9) || b.id - a.id);
+  $('#mc-content').innerHTML = `
+    <div class="hive-list" style="overflow:auto">
+      <div class="audit-row" style="grid-template-columns:50px 1fr 100px 90px 110px 130px">
+        <div>ID</div><div>TITLE</div><div>AGENT</div><div>STATUS</div><div>TOKENS / COST</div><div>ACTIONS</div>
+      </div>
+      ${filtered.map(t => `
+        <div class="audit-row" style="grid-template-columns:50px 1fr 100px 90px 110px 130px">
+          <div class="muted">#${t.id}</div>
+          <div>
+            <div style="font-weight:600">${esc(t.title)}</div>
+            ${t.description ? `<div class="muted" style="font-size:11px">${esc(t.description.slice(0,80))}${t.description.length>80?'…':''}</div>` : ''}
+          </div>
+          <div><span class="agent-tag-pill" data-agent="${esc(t.agent||'main')}"><span class="dot"></span>${esc(t.agent || '—')}</span></div>
+          <div><span class="pill ${t.status==='done'?'success':t.status==='live'?'active':t.status==='failed'?'fail':'stopped'}">${esc(t.status)}</span></div>
+          <div class="muted">${t.tokens || 0}t · $${(+t.cost_usd||0).toFixed(4)}</div>
+          <div class="row" style="gap:4px">
+            ${t.status === 'queued' && t.agent ? `<button class="btn sm primary" onclick="runTask(${t.id})">▶</button>` : ''}
+            ${t.status === 'done' || t.status === 'failed' ? `<button class="btn sm ghost" onclick="retryTask(${t.id})">↻</button>` : ''}
+            ${t.result ? `<button class="btn sm ghost" onclick="showResultModal(${t.id})">👁</button>` : ''}
+            <button class="btn sm ghost danger" onclick="deleteTaskHard(${t.id})">🗑</button>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
 }
 
 function renderTaskCard(t) {
@@ -1482,7 +1563,10 @@ async function renderHive() {
   `;
   await refreshHive();
 }
-function hiveTab(t) { _hiveTab = t; renderHive(); }
+function hiveTab(t) {
+  if (t !== '3d' && _hive3d?.dispose) { _hive3d.dispose(); _hive3d = null; }
+  _hiveTab = t; renderHive();
+}
 function hiveFilter(a) { _hiveAgentFilter = a; refreshHive(); }
 function hivePeriod(p) { _hivePeriod = p; refreshHive(); }
 async function refreshHive() {
@@ -1559,15 +1643,245 @@ function renderHive2D(data) {
   });
   _cy.ready(() => { _cy.fit(undefined, 60); });
 }
+// 3D Hive Mind brain — V3 transcript ch.1, ch.15 ("holy grail of the hive mind").
+// Real three.js scene: 6 agent supernodes orbiting a central core, with task
+// nodes orbiting each agent. Pulses when activity is recent.
+let _hive3d = null;  // {scene, camera, renderer, raf, dispose}
 function renderHive3D() {
-  $('#hive-content').innerHTML = `
-    <div class="brain-3d-placeholder">
-      <div class="icon">🧠</div>
-      <div style="font-size:15px;color:var(--text);margin-bottom:6px">3D brain — coming soon</div>
-      <div style="max-width:520px">A volumetric visualization (three.js + custom brain mesh) where each region pulses as agents fire. Skipped in this build because the 2D graph already covers daily inspection; the 3D layer would add ~2MB of three.js with marginal ops value.</div>
-      <div class="mt-12"><button class="btn" onclick="hiveTab('2d')">Show 2D graph instead</button></div>
-    </div>
-  `;
+  $('#hive-content').innerHTML = `<div id="hive-3d" style="height:520px;background:var(--panel);border-radius:10px;border:1px solid var(--border);position:relative;overflow:hidden">
+    <div id="hive-3d-overlay" style="position:absolute;top:12px;left:14px;color:var(--muted);font-size:11px;pointer-events:none;font-family:ui-monospace,monospace"></div>
+    <div id="hive-3d-tooltip" style="position:absolute;display:none;padding:6px 10px;background:rgba(11,12,16,.95);border:1px solid var(--border-2);border-radius:6px;color:var(--text);font-size:12px;pointer-events:none;max-width:280px;z-index:10"></div>
+  </div>`;
+  if (typeof THREE === 'undefined') {
+    $('#hive-3d').innerHTML = '<div class="empty">three.js failed to load. Falling back to 2D.</div>';
+    setTimeout(() => hiveTab('2d'), 1200);
+    return;
+  }
+  start3DBrain();
+}
+
+const AGENT_COLORS = {
+  main:     0x8b7cff,
+  meta:     0x6366f1,
+  comms:    0xec4899,
+  content:  0xf59e0b,
+  ops:      0x10b981,
+  research: 0x8b5cf6,
+  sales:    0x06b6d4,
+};
+
+async function start3DBrain() {
+  // Tear down any prior instance.
+  if (_hive3d?.dispose) _hive3d.dispose();
+
+  const data = await api(`/api/hive?period=${_hivePeriod}`);
+  const container = $('#hive-3d');
+  const overlay = $('#hive-3d-overlay');
+  const tooltip = $('#hive-3d-tooltip');
+
+  const W = container.clientWidth;
+  const H = container.clientHeight;
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0a0b10);
+  scene.fog = new THREE.Fog(0x0a0b10, 50, 220);
+
+  const camera = new THREE.PerspectiveCamera(60, W / H, 0.1, 500);
+  camera.position.set(0, 30, 90);
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setSize(W, H);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  container.appendChild(renderer.domElement);
+
+  // Ambient + directional light
+  scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+  const dir = new THREE.DirectionalLight(0xffffff, 0.9);
+  dir.position.set(20, 40, 30);
+  scene.add(dir);
+
+  // Central "core" — pulses with overall activity.
+  const core = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(4, 1),
+    new THREE.MeshStandardMaterial({ color: 0xb388ff, emissive: 0x6c4cff, emissiveIntensity: 0.7, roughness: 0.4, metalness: 0.6 }),
+  );
+  scene.add(core);
+
+  // Group nodes by agent
+  const byAgent = {};
+  for (const n of data.nodes) {
+    if (n.data.type !== 'task') continue;
+    (byAgent[n.data.agent] ??= []).push(n.data);
+  }
+  const agentNames = Object.keys(byAgent).filter(a => AGENT_COLORS[a]);
+  if (!agentNames.length) {
+    // Fallback — show empty brain.
+    agentNames.push(...Object.keys(AGENT_COLORS));
+    agentNames.forEach(a => byAgent[a] = []);
+  }
+
+  const agentMeshes = [];
+  const taskMeshes = [];
+  const allInteractive = []; // for raycasting
+  const orbitRadius = 32;
+
+  agentNames.forEach((name, i) => {
+    const angle = (i / agentNames.length) * Math.PI * 2;
+    const x = Math.cos(angle) * orbitRadius;
+    const z = Math.sin(angle) * orbitRadius;
+    const color = AGENT_COLORS[name] || 0x888888;
+
+    // Agent supernode
+    const agentMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(2.2, 24, 16),
+      new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.35, roughness: 0.3, metalness: 0.5 }),
+    );
+    agentMesh.position.set(x, 0, z);
+    agentMesh.userData = { type: 'agent', name, count: byAgent[name].length };
+    scene.add(agentMesh);
+    agentMeshes.push(agentMesh);
+    allInteractive.push(agentMesh);
+
+    // Faint orbit ring
+    const ringGeo = new THREE.RingGeometry(orbitRadius - 0.1, orbitRadius + 0.1, 64);
+    const ringMat = new THREE.MeshBasicMaterial({ color: 0x1d2030, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.rotation.x = Math.PI / 2;
+    if (i === 0) scene.add(ring);
+
+    // Connecting line agent → core
+    const lineGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), agentMesh.position]);
+    const lineMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.3 });
+    scene.add(new THREE.Line(lineGeo, lineMat));
+
+    // Task nodes orbiting this agent
+    byAgent[name].forEach((task, ti) => {
+      const taskAngle = (ti / Math.max(1, byAgent[name].length)) * Math.PI * 2;
+      const r = 6 + (ti % 3) * 1.5; // multi-layer cluster
+      const tx = x + Math.cos(taskAngle) * r;
+      const tz = z + Math.sin(taskAngle) * r;
+      const ty = (Math.sin(ti * 0.7) - 0.5) * 4;
+      const taskMesh = new THREE.Mesh(
+        new THREE.SphereGeometry(0.55, 12, 8),
+        new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.4, roughness: 0.6 }),
+      );
+      taskMesh.position.set(tx, ty, tz);
+      taskMesh.userData = {
+        type: 'task',
+        agent: name,
+        id: task.id,
+        label: task.fullPrompt || task.label || `task ${task.id}`,
+        createdAt: task.createdAt,
+      };
+      taskMesh.userData.parentAngle = taskAngle;
+      taskMesh.userData.parentR = r;
+      taskMesh.userData.parentX = x;
+      taskMesh.userData.parentZ = z;
+      taskMesh.userData.taskY = ty;
+      scene.add(taskMesh);
+      taskMeshes.push(taskMesh);
+      allInteractive.push(taskMesh);
+    });
+  });
+
+  overlay.textContent = `🧠 Hive Mind · ${data.counts.agents} agents · ${data.counts.tasks} tasks · ${_hivePeriod}`;
+
+  // Raycaster for hover tooltips
+  const raycaster = new THREE.Raycaster();
+  const mouse = new THREE.Vector2();
+  function onMove(ev) {
+    const rect = container.getBoundingClientRect();
+    mouse.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera);
+    const hits = raycaster.intersectObjects(allInteractive);
+    if (hits.length) {
+      const o = hits[0].object.userData;
+      const txt = o.type === 'agent'
+        ? `<b>${o.name}</b> · ${o.count} tasks`
+        : `<b>${o.agent}</b> · ${esc(o.label.slice(0, 100))}${o.label.length > 100 ? '…' : ''}`;
+      tooltip.innerHTML = txt;
+      tooltip.style.display = 'block';
+      tooltip.style.left = (ev.clientX - rect.left + 12) + 'px';
+      tooltip.style.top = (ev.clientY - rect.top + 12) + 'px';
+    } else {
+      tooltip.style.display = 'none';
+    }
+  }
+  container.addEventListener('mousemove', onMove);
+
+  // Drag-to-orbit camera
+  let dragging = false;
+  let lastX = 0, lastY = 0;
+  let camTheta = 0, camPhi = Math.PI / 4;
+  let camDist = 95;
+  function setCam() {
+    camera.position.x = Math.sin(camTheta) * Math.cos(camPhi) * camDist;
+    camera.position.y = Math.sin(camPhi) * camDist;
+    camera.position.z = Math.cos(camTheta) * Math.cos(camPhi) * camDist;
+    camera.lookAt(0, 0, 0);
+  }
+  setCam();
+  container.addEventListener('mousedown', (e) => { dragging = true; lastX = e.clientX; lastY = e.clientY; });
+  window.addEventListener('mouseup', () => { dragging = false; });
+  window.addEventListener('mousemove', (e) => {
+    if (!dragging) return;
+    camTheta -= (e.clientX - lastX) * 0.005;
+    camPhi   = Math.max(0.1, Math.min(Math.PI - 0.1, camPhi - (e.clientY - lastY) * 0.005));
+    lastX = e.clientX; lastY = e.clientY;
+    setCam();
+  });
+  container.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    camDist = Math.max(40, Math.min(200, camDist + e.deltaY * 0.05));
+    setCam();
+  }, { passive: false });
+
+  // Animate
+  let t = 0;
+  let stopped = false;
+  function loop() {
+    if (stopped) return;
+    t += 0.01;
+    core.rotation.x = t * 0.3;
+    core.rotation.y = t * 0.5;
+    const pulse = 1 + 0.15 * Math.sin(t * 2);
+    core.scale.set(pulse, pulse, pulse);
+
+    agentMeshes.forEach((m, i) => {
+      m.rotation.y = t * 0.5;
+      const localPulse = 1 + 0.08 * Math.sin(t * 3 + i);
+      m.scale.set(localPulse, localPulse, localPulse);
+    });
+
+    taskMeshes.forEach((m) => {
+      const u = m.userData;
+      u.parentAngle += 0.005;
+      m.position.x = u.parentX + Math.cos(u.parentAngle) * u.parentR;
+      m.position.z = u.parentZ + Math.sin(u.parentAngle) * u.parentR;
+      m.position.y = u.taskY + Math.sin(t + u.parentAngle * 2) * 0.5;
+    });
+
+    renderer.render(scene, camera);
+    _hive3d.raf = requestAnimationFrame(loop);
+  }
+
+  _hive3d = {
+    scene, camera, renderer,
+    raf: null,
+    dispose: () => {
+      stopped = true;
+      cancelAnimationFrame(_hive3d.raf);
+      container.removeEventListener('mousemove', onMove);
+      container.contains(renderer.domElement) && container.removeChild(renderer.domElement);
+      renderer.dispose();
+      scene.traverse(o => {
+        if (o.geometry) o.geometry.dispose();
+        if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => m.dispose());
+      });
+    },
+  };
+  loop();
 }
 
 // ============================================================================
@@ -1750,9 +2064,31 @@ async function toggleSchedSwitch(enabled) {
 // ============================================================================
 // Boot
 // ============================================================================
+async function probeServices() {
+  const probes = [
+    { id: 'svc-bridge',  url: 'http://127.0.0.1:3142/' },
+    { id: 'svc-warroom', url: 'http://localhost:7860/healthz' },
+    { id: 'svc-meeting', url: 'http://localhost:7861/healthz' },
+  ];
+  for (const p of probes) {
+    try {
+      await fetch(p.url, { mode: 'no-cors', cache: 'no-store' });
+      $('#' + p.id + '-state').textContent = 'online';
+      $('#' + p.id + '-state').style.color = 'var(--ok)';
+      $('#' + p.id + ' .ico').style.color = 'var(--ok)';
+    } catch {
+      $('#' + p.id + '-state').textContent = 'offline';
+      $('#' + p.id + '-state').style.color = 'var(--muted)';
+      $('#' + p.id + ' .ico').style.color = 'var(--err)';
+    }
+  }
+}
+
 navigate();
 probeWarRoom();
+probeServices();
 setInterval(probeWarRoom, 12000);
+setInterval(probeServices, 10000);
 </script>
 </body>
 </html>

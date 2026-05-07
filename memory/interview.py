@@ -42,7 +42,7 @@ DEFAULTS: dict[str, Any] = {
         "include_obsidian_folder": True,
     },
     "embeddings": {
-        "model": "text-embedding-004",
+        "model": "gemini-embedding-001",
         "dimensions": 768,
     },
     "kinds": ["fact", "preference", "context"],
@@ -150,7 +150,7 @@ QUESTIONS: list[dict[str, Any]] = [
         "key": "embeddings.model",
         "q": "Embedding model? (text-embedding-004 = Gemini 768-dim cheap default)",
         "type": "str",
-        "default": "text-embedding-004",
+        "default": "gemini-embedding-001",
         "valid": lambda v: len(v) > 3,
     },
 ]

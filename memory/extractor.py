@@ -19,7 +19,7 @@ import google.generativeai as genai
 DB_PATH = os.environ.get("DB_PATH", "./store/claudeclaw.db")
 WINDOW_SECONDS = 30 * 60
 EXTRACTION_MODEL = "gemini-2.5-flash"
-EMBEDDING_MODEL = "text-embedding-004"  # 768-dim
+EMBEDDING_MODEL = "gemini-embedding-001"  # 768-dim; text-embedding-004 was deprecated
 
 PROMPT = """You are a memory classifier for a personal AI system.
 

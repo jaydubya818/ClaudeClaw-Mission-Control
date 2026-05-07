@@ -10,7 +10,9 @@ import { resolve } from "node:path";
 const REPO_ROOT = resolve(process.cwd(), "../../");
 const AGENT_ROOT = resolve(REPO_ROOT, "agents");
 const CLAUDE_CMD = process.env.CLAUDE_CMD ?? "claude";
-const TURN_TIMEOUT_MS = Number(process.env.TASK_TIMEOUT_MS ?? 5 * 60 * 1000);
+// Default 10min — task #8 ("netflix deep dive") came within 6s of the old 5min cap.
+// Override per-deployment via TASK_TIMEOUT_MS=<ms> in .env.
+const TURN_TIMEOUT_MS = Number(process.env.TASK_TIMEOUT_MS ?? 10 * 60 * 1000);
 const MAX_RESULT_CHARS = 8000;
 
 type TaskRow = {
