@@ -81,21 +81,46 @@ async function semanticTop(
   k: number,
 ): Promise<string[]> {
   const q = await embed(query);
-  const rows = db
+  // Pull this-agent memories first (boosted), then cross-agent (de-prioritized).
+  // Lets the active agent benefit from peer agents' findings without drowning
+  // its own context. Cross-agent matches must clear a higher bar (boost penalty).
+  const own = db
     .prepare(
-      `SELECT m.content, e.vector FROM memories m
+      `SELECT m.id, m.content, m.agent, e.vector FROM memories m
        JOIN embeddings e ON e.memory_id = m.id
        WHERE m.agent = ?`,
     )
-    .all(agent) as { content: string; vector: Buffer }[];
+    .all(agent) as MemRow[];
+  const cross = db
+    .prepare(
+      `SELECT m.id, m.content, m.agent, e.vector FROM memories m
+       JOIN embeddings e ON e.memory_id = m.id
+       WHERE m.agent IS NOT NULL AND m.agent != ?`,
+    )
+    .all(agent) as MemRow[];
 
-  const scored = rows.map((r) => {
-    const v = bufToFloats(r.vector);
-    return { content: r.content, score: cosine(q, v) };
-  });
+  const scored = [
+    ...own.map((r) => ({
+      id: r.id, content: r.content, agent: r.agent,
+      score: cosine(q, bufToFloats(r.vector)),
+    })),
+    ...cross.map((r) => ({
+      id: r.id, content: r.content, agent: r.agent,
+      // Penalize cross-agent matches so they only surface when very relevant.
+      score: cosine(q, bufToFloats(r.vector)) - 0.10,
+    })),
+  ];
   scored.sort((a, b) => b.score - a.score);
-  return scored.slice(0, k).map((s) => s.content);
+  return scored
+    .slice(0, k)
+    // Only surface scores above a small floor to avoid noise.
+    .filter((s) => s.score > 0.3)
+    .map((s) => s.agent === agent
+      ? s.content
+      : `(via ${s.agent}) ${s.content}`);
 }
+
+interface MemRow { id: number; content: string; agent: string; vector: Buffer }
 
 function bufToFloats(buf: Buffer): number[] {
   const out: number[] = new Array(buf.length / 4);

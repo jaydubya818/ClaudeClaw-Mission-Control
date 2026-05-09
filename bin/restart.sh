@@ -25,7 +25,7 @@ LOG_DIR="$HOME/Library/Logs/claudeclaw"
 mkdir -p "$LOG_DIR"
 
 # service → (pkill_pattern, port, dev_cmd, dev_cwd)
-declare -a SERVICES=(bridge dashboard warroom scheduler consolidator meeting)
+declare -a SERVICES=(bridge dashboard warroom scheduler consolidator meeting decay)
 
 pattern_for() {
   case "$1" in
@@ -35,6 +35,7 @@ pattern_for() {
     meeting)       echo "warroom/meeting.py" ;;
     scheduler)     echo "tsx.*scheduler/runner" ;;
     consolidator)  echo "memory.consolidator\|memory/consolidator.py" ;;
+    decay)         echo "memory.decay\|memory/decay.py" ;;
     *)             echo "" ;;
   esac
 }
@@ -58,6 +59,7 @@ dev_cmd_for() {
     meeting)       echo "$REPO/apps/warroom|.venv/bin/python meeting.py" ;;
     scheduler)     echo "$REPO|node --import=tsx scheduler/runner.ts" ;;
     consolidator)  echo "$REPO|.venv/bin/python -m memory.consolidator" ;;
+    decay)         echo "$REPO|.venv/bin/python -m memory.decay" ;;
     *)             echo "" ;;
   esac
 }
@@ -65,14 +67,26 @@ dev_cmd_for() {
 stop_service() {
   local svc="$1"
   local pat="$(pattern_for "$svc")"
+  local port="$(port_for "$svc")"
   echo "  → stopping $svc"
   # 1. Try launchd bootout (idempotent — exits 0 if not loaded)
   launchctl bootout "gui/$(id -u)/com.claudeclaw.$svc" 2>/dev/null || true
   # 2. pkill any manual dev process
   if [ -n "$pat" ]; then
     pkill -f "$pat" 2>/dev/null || true
+    sleep 0.5
+    # SIGKILL if still alive
+    pkill -9 -f "$pat" 2>/dev/null || true
   fi
-  sleep 0.3
+  # 3. Free the port — nuke anyone still listening (handles zombies / old tsx workers)
+  if [ -n "$port" ] && command -v lsof >/dev/null 2>&1; then
+    local pids="$(lsof -ti tcp:$port 2>/dev/null | tr '\n' ' ')"
+    if [ -n "$pids" ]; then
+      echo "    killing PIDs on :$port: $pids"
+      kill -9 $pids 2>/dev/null || true
+    fi
+  fi
+  sleep 0.5
 }
 
 start_service() {
@@ -151,11 +165,11 @@ case "${1:-status}" in
     echo ""
     status_all
     ;;
-  bridge|dashboard|warroom|scheduler|consolidator|meeting)
+  bridge|dashboard|warroom|scheduler|consolidator|meeting|decay)
     restart_one "$1"
     ;;
   *)
-    echo "Usage: $0 {status | all | bridge | dashboard | warroom | scheduler | consolidator | meeting}"
+    echo "Usage: $0 {status | all | bridge | dashboard | warroom | scheduler | consolidator | meeting | decay}"
     echo "Env:    MODE=launchd|dev  (default: dev)"
     exit 1
     ;;

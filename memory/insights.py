@@ -20,10 +20,18 @@ import sys
 import time
 from typing import Optional
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 DB_PATH = os.environ.get("DB_PATH", "./store/claudeclaw.db")
 MODEL = "gemini-2.5-flash"
+
+_client: genai.Client | None = None
+def _gclient() -> genai.Client:
+    global _client
+    if _client is None:
+        _client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+    return _client
 DEFAULT_PERIOD_DAYS = 7
 MIN_CONFIDENCE = 0.6
 MAX_INSIGHTS_PER_RUN = 10
@@ -92,8 +100,6 @@ def call_gemini(memories: list[dict], days: int) -> list[dict]:
         return []
     if "GEMINI_API_KEY" not in os.environ:
         raise RuntimeError("GEMINI_API_KEY unset")
-    genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-    model = genai.GenerativeModel(MODEL)
     transcript = "\n".join(
         f"[id={m['id']} agent={m['agent']} kind={m['kind']} imp={m['importance']:.2f}] {m['content']}"
         for m in memories
@@ -101,9 +107,10 @@ def call_gemini(memories: list[dict], days: int) -> list[dict]:
     prompt = PROMPT.format(
         n=len(memories), days=days, max_n=MAX_INSIGHTS_PER_RUN
     ) + transcript
-    resp = model.generate_content(
-        prompt,
-        generation_config={"response_mime_type": "application/json"},
+    resp = _gclient().models.generate_content(
+        model=MODEL,
+        contents=prompt,
+        config=types.GenerateContentConfig(response_mime_type="application/json"),
     )
     try:
         items = json.loads(resp.text)

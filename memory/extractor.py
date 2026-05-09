@@ -14,12 +14,22 @@ import sys
 import time
 from pathlib import Path
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 DB_PATH = os.environ.get("DB_PATH", "./store/claudeclaw.db")
 WINDOW_SECONDS = 30 * 60
 EXTRACTION_MODEL = "gemini-2.5-flash"
-EMBEDDING_MODEL = "gemini-embedding-001"  # 768-dim; text-embedding-004 was deprecated
+EMBEDDING_MODEL = "gemini-embedding-001"  # 768-dim
+EMBEDDING_DIMS = 768
+
+# Lazy-instantiated client; reused across calls.
+_client: genai.Client | None = None
+def _gclient() -> genai.Client:
+    global _client
+    if _client is None:
+        _client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+    return _client
 
 PROMPT = """You are a memory classifier for a personal AI system.
 
@@ -54,15 +64,14 @@ def fetch_window(db: sqlite3.Connection) -> list[dict]:
 def classify(window: list[dict]) -> list[dict]:
     if not window:
         return []
-    genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-    model = genai.GenerativeModel(EXTRACTION_MODEL)
     transcript = "\n\n".join(
         f"[{m['agent']}] USER: {m['prompt']}\n[{m['agent']}] REPLY: {m['reply']}"
         for m in window
     )
-    resp = model.generate_content(
-        PROMPT + transcript,
-        generation_config={"response_mime_type": "application/json"},
+    resp = _gclient().models.generate_content(
+        model=EXTRACTION_MODEL,
+        contents=PROMPT + transcript,
+        config=types.GenerateContentConfig(response_mime_type="application/json"),
     )
     try:
         return json.loads(resp.text)
@@ -72,8 +81,12 @@ def classify(window: list[dict]) -> list[dict]:
 
 
 def embed(text: str) -> bytes:
-    result = genai.embed_content(model=EMBEDDING_MODEL, content=text)
-    vec = result["embedding"]
+    result = _gclient().models.embed_content(
+        model=EMBEDDING_MODEL,
+        contents=text,
+        config=types.EmbedContentConfig(output_dimensionality=EMBEDDING_DIMS),
+    )
+    vec = result.embeddings[0].values
     return struct.pack(f"{len(vec)}f", *vec)
 
 
