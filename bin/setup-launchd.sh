@@ -32,14 +32,38 @@ install_one() {
   # Aggressive cleanup: bootout, kill any process matching the service, wait.
   launchctl bootout "gui/$UID_/com.claudeclaw.$svc" 2>/dev/null || true
   launchctl remove "com.claudeclaw.$svc" 2>/dev/null || true
+  # Service-specific process patterns (catch the WHOLE tree: npm/node/tsx).
   case "$svc" in
-    bridge)        pkill -f "tsx.*bridge/src/index"     2>/dev/null || true ;;
-    dashboard)     pkill -f "tsx.*dashboard/src/server" 2>/dev/null || true ;;
-    warroom)       pkill -f "warroom/server.py"          2>/dev/null || true ;;
-    meeting)       pkill -f "warroom/meeting.py"         2>/dev/null || true ;;
-    scheduler)     pkill -f "tsx.*scheduler/runner"     2>/dev/null || true ;;
-    consolidator)  pkill -f "memory.consolidator"        2>/dev/null || true ;;
+    bridge)
+      pkill -f "bridge/src/index"     2>/dev/null || true
+      pkill -f "npm.*bridge"          2>/dev/null || true ;;
+    dashboard)
+      pkill -f "dashboard/src/server" 2>/dev/null || true
+      pkill -f "npm.*dashboard"       2>/dev/null || true ;;
+    warroom)
+      pkill -f "warroom/server.py"    2>/dev/null || true ;;
+    meeting)
+      pkill -f "warroom/meeting.py"   2>/dev/null || true ;;
+    scheduler)
+      pkill -f "scheduler/runner"     2>/dev/null || true ;;
+    consolidator)
+      pkill -f "memory.consolidator"  2>/dev/null || true ;;
   esac
+  # Free the port — kills any process still bound to the service's port.
+  local port=""
+  case "$svc" in
+    bridge)     port=3142 ;;
+    dashboard)  port=3141 ;;
+    warroom)    port=7860 ;;
+    meeting)    port=7861 ;;
+  esac
+  if [ -n "$port" ] && command -v lsof >/dev/null 2>&1; then
+    local pids=$(lsof -ti tcp:$port 2>/dev/null | tr '\n' ' ')
+    if [ -n "$pids" ]; then
+      echo "    freeing port $port (kill $pids)"
+      kill -9 $pids 2>/dev/null || true
+    fi
+  fi
   sleep 1
 
   # Copy fresh plist
