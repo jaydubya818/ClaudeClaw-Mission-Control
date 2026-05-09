@@ -29,18 +29,57 @@ install_one() {
     return 1
   fi
   echo "  → $svc"
-  cp "$src" "$dst"
-  # bootout first (idempotent — exits 0 even if not loaded)
+  # Aggressive cleanup: bootout, kill any process matching the service, wait.
   launchctl bootout "gui/$UID_/com.claudeclaw.$svc" 2>/dev/null || true
-  # bootstrap fresh
-  if launchctl bootstrap "gui/$UID_" "$dst" 2>&1 | sed "s/^/    /"; then
-    :
-  fi
-  # Wait briefly then check status
+  launchctl remove "com.claudeclaw.$svc" 2>/dev/null || true
+  case "$svc" in
+    bridge)        pkill -f "tsx.*bridge/src/index"     2>/dev/null || true ;;
+    dashboard)     pkill -f "tsx.*dashboard/src/server" 2>/dev/null || true ;;
+    warroom)       pkill -f "warroom/server.py"          2>/dev/null || true ;;
+    meeting)       pkill -f "warroom/meeting.py"         2>/dev/null || true ;;
+    scheduler)     pkill -f "tsx.*scheduler/runner"     2>/dev/null || true ;;
+    consolidator)  pkill -f "memory.consolidator"        2>/dev/null || true ;;
+  esac
   sleep 1
+
+  # Copy fresh plist
+  cp "$src" "$dst"
+
+  # Bootstrap with a single retry on Input/output error (race condition on bootout)
+  local attempt=1 max_attempts=3
+  while [ $attempt -le $max_attempts ]; do
+    local out
+    out=$(launchctl bootstrap "gui/$UID_" "$dst" 2>&1)
+    if [ $? -eq 0 ] && [ -z "$out" ]; then
+      break
+    fi
+    if echo "$out" | grep -qi "Input/output error\|Bootstrap failed"; then
+      [ $attempt -lt $max_attempts ] && {
+        echo "    retry $((attempt+1))/$max_attempts after I/O error..."
+        launchctl bootout "gui/$UID_/com.claudeclaw.$svc" 2>/dev/null || true
+        sleep 2
+      } || echo "$out" | sed "s/^/    /"
+    else
+      echo "$out" | sed "s/^/    /"
+      break
+    fi
+    attempt=$((attempt + 1))
+  done
+
+  # Wait briefly then check status
+  sleep 2
   if launchctl print "gui/$UID_/com.claudeclaw.$svc" >/dev/null 2>&1; then
-    local pid=$(launchctl list | grep "com.claudeclaw.$svc" | awk '{print $1}')
-    [ "$pid" != "-" ] && echo "    ✓ loaded (pid=$pid)" || echo "    ⚠ loaded but not running yet"
+    local entry
+    entry=$(launchctl list | grep "com.claudeclaw.$svc")
+    local pid=$(echo "$entry" | awk '{print $1}')
+    local exit_code=$(echo "$entry" | awk '{print $2}')
+    if [ "$pid" != "-" ]; then
+      echo "    ✓ loaded (pid=$pid)"
+    elif [ "$exit_code" = "0" ]; then
+      echo "    ✓ loaded (idle — runs on schedule)"
+    else
+      echo "    ⚠ loaded but exited code=$exit_code (check ~/Library/Logs/claudeclaw/$svc.err)"
+    fi
   else
     echo "    ✗ failed to load"
   fi

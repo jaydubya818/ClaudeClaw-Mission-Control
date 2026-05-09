@@ -2,25 +2,27 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>Label</key><string>com.claudeclaw.dashboard</string>
+  <key>Label</key>           <string>com.claudeclaw.dashboard</string>
 
   <key>ProgramArguments</key>
   <array>
-    <string>/usr/local/bin/node</string>
-    <string>--import=tsx</string>
-    <string>/Users/jaywest/claudeclaw/apps/dashboard/src/server.ts</string>
+    <string>/bin/bash</string>
+    <string>/Users/jaywest/claudeclaw/bin/launchd-wrap.sh</string>
+    <string>dashboard</string>
   </array>
 
-  <key>WorkingDirectory</key><string>/Users/jaywest/claudeclaw/apps/dashboard</string>
+  <key>WorkingDirectory</key><string>/Users/jaywest/claudeclaw</string>
+
+  <key>RunAtLoad</key>       <true/>
+  <key>KeepAlive</key>       <true/>
+
+  <key>StandardOutPath</key> <string>/Users/jaywest/Library/Logs/claudeclaw/dashboard.out</string>
+  <key>StandardErrorPath</key><string>/Users/jaywest/Library/Logs/claudeclaw/dashboard.err</string>
+
   <key>EnvironmentVariables</key>
   <dict>
-    <key>PATH</key><string>/usr/local/bin:/usr/bin:/bin</string>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
   </dict>
-
-  <key>RunAtLoad</key><true/>
-  <key>KeepAlive</key><true/>
-
-  <key>StandardOutPath</key><string>/Users/jaywest/Library/Logs/claudeclaw/dashboard.out</string>
-  <key>StandardErrorPath</key><string>/Users/jaywest/Library/Logs/claudeclaw/dashboard.err</string>
 </dict>
 </plist>

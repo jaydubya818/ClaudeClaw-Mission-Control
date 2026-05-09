@@ -2,20 +2,27 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>Label</key><string>com.claudeclaw.warroom</string>
+  <key>Label</key>           <string>com.claudeclaw.warroom</string>
 
   <key>ProgramArguments</key>
   <array>
-    <string>/Users/jaywest/claudeclaw/apps/warroom/.venv/bin/python</string>
-    <string>/Users/jaywest/claudeclaw/apps/warroom/server.py</string>
+    <string>/bin/bash</string>
+    <string>/Users/jaywest/claudeclaw/bin/launchd-wrap.sh</string>
+    <string>warroom</string>
   </array>
 
-  <key>WorkingDirectory</key><string>/Users/jaywest/claudeclaw/apps/warroom</string>
+  <key>WorkingDirectory</key><string>/Users/jaywest/claudeclaw</string>
 
-  <key>RunAtLoad</key><true/>
-  <key>KeepAlive</key><true/>
+  <key>RunAtLoad</key>       <true/>
+  <key>KeepAlive</key>       <true/>
 
-  <key>StandardOutPath</key><string>/Users/jaywest/Library/Logs/claudeclaw/warroom.out</string>
+  <key>StandardOutPath</key> <string>/Users/jaywest/Library/Logs/claudeclaw/warroom.out</string>
   <key>StandardErrorPath</key><string>/Users/jaywest/Library/Logs/claudeclaw/warroom.err</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
 </dict>
 </plist>

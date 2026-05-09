@@ -2,21 +2,27 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>Label</key><string>com.claudeclaw.consolidator</string>
+  <key>Label</key>           <string>com.claudeclaw.consolidator</string>
 
-  <!-- Runs every 30 minutes: extractor then consolidator. -->
   <key>ProgramArguments</key>
   <array>
-    <string>/bin/sh</string>
-    <string>-c</string>
-    <string>cd /Users/jaywest/claudeclaw &amp;&amp; .venv/bin/python memory/extractor.py &amp;&amp; .venv/bin/python memory/consolidator.py</string>
+    <string>/bin/bash</string>
+    <string>/Users/jaywest/claudeclaw/bin/launchd-wrap.sh</string>
+    <string>consolidator</string>
   </array>
 
-  <key>StartInterval</key><integer>1800</integer>
+  <key>WorkingDirectory</key><string>/Users/jaywest/claudeclaw</string>
 
-  <key>RunAtLoad</key><true/>
+  <key>RunAtLoad</key>       <true/>
+  <key>KeepAlive</key>       <false/>
 
-  <key>StandardOutPath</key><string>/Users/jaywest/Library/Logs/claudeclaw/consolidator.out</string>
+  <key>StandardOutPath</key> <string>/Users/jaywest/Library/Logs/claudeclaw/consolidator.out</string>
   <key>StandardErrorPath</key><string>/Users/jaywest/Library/Logs/claudeclaw/consolidator.err</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
 </dict>
 </plist>
